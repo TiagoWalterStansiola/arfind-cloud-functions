@@ -5,11 +5,11 @@ const admin = require('firebase-admin');
 admin.initializeApp();
 
 // Importa las funciones de los módulos
-const funcion1 = require('./funciones/usuarios/index');
+const clientes = require('./funciones/clientes/index');
 const mercadopago = require('./funciones/mercadopago/index');
 
 // Exporta las funciones
-exports.funcionDePrueba = funcion1.funcionDePrueba;
+exports.funcionDePrueba = clientes.funcionDePrueba2;
 exports.crearOrdenMercadoPago = mercadopago.crearOrdenMercadoPago;
 exports.crearOrdenMercadoPago3 = mercadopago.crearOrdenMercadoPago3;
 
