@@ -6,12 +6,12 @@ const admin = require('firebase-admin');
  *    Módulo para la gestión de planes en Firestore con acceso restringido a administradores.                                                                     *                                                                      *
  *                                                                                                                                                                *
  *    Contiene funciones:                                                                                                                                         *
- *       - crearPlan                                                                                                                                              *
- *       - obtenerPlanes                                                                                                                                          *
- *       - actualizarPlan                                                                                                                                         *
- *       - eliminarPlan                                                                                                                                           *
- *    Deploy del modulo:                                                                                                                                          *
- *    firebase deploy --only functions:crearPlan,functions:obtenerPlanes,functions:actualizarPlan,functions:eliminarPlan                                          *
+ *       - createPlan                                                                                                                                             *
+ *       - getPlanes                                                                                                                                               *
+ *       - updatePlan                                                                                                                                             *
+ *       - deletePlan                                                                                                                                             *
+ *    Deploy del módulo:                                                                                                                                          *
+ *    firebase deploy --only functions:createPlan,functions:getPlanes,functions:updatePlan,functions:deletePlan                                                    *
  ******************************************************************************************************************************************************************/
 
 // Middleware de autenticación y verificación de rol de administrador en la colección "Empleados"
@@ -41,37 +41,36 @@ const authenticateAdmin = async (req, res, next) => {
 };
 
 // Crear un nuevo plan
-exports.crearPlan = functions.https.onRequest((req, res) => {
-    authenticateAdmin(req, res, async () => {
-      const { precio, descripcion, refresco, cantidad_compartidos, imagen } = req.body;
-  
-      // Verificar que se hayan pasado todos los datos necesarios
-      if (typeof precio !== 'number' || typeof refresco !== 'number' ||
-          typeof cantidad_compartidos !== 'number' || typeof descripcion !== 'string' || typeof imagen !== 'string') {
-        return res.status(400).json({ message: 'Invalid plan data' });
-      }
-  
-      try {
-        // Crear un nuevo objeto plan sin el ID
-        const newPlan = { precio, descripcion, refresco, cantidad_compartidos, imagen };
-        
-        // Agregar el nuevo plan a la colección "planes" y obtener la referencia del documento
-        const planRef = await admin.firestore().collection('planes').add(newPlan);
-        
-        // Obtener el ID del documento generado automáticamente
-        const planId = planRef.id;
-        
-        // Responder con el mensaje de éxito y el nuevo plan, incluyendo su ID
-        return res.status(201).json({ message: 'Plan creado con éxito', plan: { id: planId, ...newPlan } });
-      } catch (error) {
-        return res.status(500).json({ message: 'Error al crear el plan', error: error.message });
-      }
-    });
+exports.createPlan = functions.https.onRequest((req, res) => {
+  authenticateAdmin(req, res, async () => {
+    const { precio, descripcion, refresco, cantidad_compartidos, imagen } = req.body;
+
+    // Verificar que se hayan pasado todos los datos necesarios
+    if (typeof precio !== 'number' || typeof refresco !== 'number' ||
+        typeof cantidad_compartidos !== 'number' || typeof descripcion !== 'string' || typeof imagen !== 'string') {
+      return res.status(400).json({ message: 'Datos de plan inválidos' });
+    }
+
+    try {
+      // Crear un nuevo objeto plan sin el ID
+      const newPlan = { precio, descripcion, refresco, cantidad_compartidos, imagen };
+      
+      // Agregar el nuevo plan a la colección "planes" y obtener la referencia del documento
+      const planRef = await admin.firestore().collection('planes').add(newPlan);
+      
+      // Obtener el ID del documento generado automáticamente
+      const planId = planRef.id;
+      
+      // Responder con el mensaje de éxito y el nuevo plan, incluyendo su ID
+      return res.status(201).json({ message: 'Plan creado con éxito', plan: { id: planId, ...newPlan } });
+    } catch (error) {
+      return res.status(500).json({ message: 'Error al crear el plan', error: error.message });
+    }
   });
-  
+});
 
 // Obtener todos los planes
-exports.obtenerPlanes = functions.https.onRequest(async (req, res) => {
+exports.getPlanes = functions.https.onRequest(async (req, res) => {
   try {
     const planesSnapshot = await admin.firestore().collection('planes').get();
     const planes = planesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -82,17 +81,18 @@ exports.obtenerPlanes = functions.https.onRequest(async (req, res) => {
 });
 
 // Actualizar un plan
-exports.actualizarPlan = functions.https.onRequest((req, res) => {
+exports.updatePlan = functions.https.onRequest((req, res) => {
   authenticateAdmin(req, res, async () => {
     const { id, precio, descripcion, refresco, cantidad_compartidos, imagen } = req.body;
 
-    if (typeof id !== 'number' || typeof precio !== 'number' || typeof refresco !== 'number' ||
+    // Verificar que los datos del plan sean válidos
+    if (typeof id !== 'string' || typeof precio !== 'number' || typeof refresco !== 'number' ||
         typeof cantidad_compartidos !== 'number' || typeof descripcion !== 'string' || typeof imagen !== 'string') {
-      return res.status(400).json({ message: 'Invalid plan data' });
+      return res.status(400).json({ message: 'Datos de plan inválidos' });
     }
 
     try {
-      const planRef = admin.firestore().collection('planes').doc(id.toString());
+      const planRef = admin.firestore().collection('planes').doc(id);
       await planRef.update({ precio, descripcion, refresco, cantidad_compartidos, imagen });
       return res.status(200).json({ message: 'Plan actualizado con éxito' });
     } catch (error) {
@@ -102,16 +102,17 @@ exports.actualizarPlan = functions.https.onRequest((req, res) => {
 });
 
 // Eliminar un plan
-exports.eliminarPlan = functions.https.onRequest((req, res) => {
+exports.deletePlan = functions.https.onRequest((req, res) => {
   authenticateAdmin(req, res, async () => {
     const { id } = req.body;
 
-    if (typeof id !== 'number') {
-      return res.status(400).json({ message: 'Plan ID is required and must be an integer' });
+    // Verificar que se haya proporcionado el ID del plan
+    if (typeof id !== 'string') {
+      return res.status(400).json({ message: 'Se requiere el ID del plan y debe ser un string' });
     }
 
     try {
-      await admin.firestore().collection('planes').doc(id.toString()).delete();
+      await admin.firestore().collection('planes').doc(id).delete();
       return res.status(200).json({ message: 'Plan eliminado con éxito' });
     } catch (error) {
       return res.status(500).json({ message: 'Error al eliminar el plan', error: error.message });
