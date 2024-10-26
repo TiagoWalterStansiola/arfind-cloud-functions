@@ -24,6 +24,7 @@ exports.getDispositivoByUsuario = dispositivos.getDispositivoByUsuario;
 exports.obtenerPlanes = planes.obtenerPlanes;
 exports.actualizarPlan = planes.actualizarPlan;
 exports.eliminarPlan = planes.eliminarPlan;
+exports.crearPlan = planes.crearPlan;
 
 exports.loginUser = clientes.loginUser;
 exports.loginUserEmailPass = clientes.loginUserEmailPass;

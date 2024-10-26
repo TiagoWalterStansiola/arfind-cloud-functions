@@ -42,23 +42,33 @@ const authenticateAdmin = async (req, res, next) => {
 
 // Crear un nuevo plan
 exports.crearPlan = functions.https.onRequest((req, res) => {
-  authenticateAdmin(req, res, async () => {
-    const { id, precio, descripcion, refresco, cantidad_compartidos, imagen } = req.body;
-
-    if (typeof id !== 'number' || typeof precio !== 'number' || typeof refresco !== 'number' ||
-        typeof cantidad_compartidos !== 'number' || typeof descripcion !== 'string' || typeof imagen !== 'string') {
-      return res.status(400).json({ message: 'Invalid plan data' });
-    }
-
-    try {
-      const newPlan = { id, precio, descripcion, refresco, cantidad_compartidos, imagen };
-      await admin.firestore().collection('planes').add(newPlan);
-      return res.status(201).json({ message: 'Plan creado con éxito', plan: newPlan });
-    } catch (error) {
-      return res.status(500).json({ message: 'Error al crear el plan', error: error.message });
-    }
+    authenticateAdmin(req, res, async () => {
+      const { precio, descripcion, refresco, cantidad_compartidos, imagen } = req.body;
+  
+      // Verificar que se hayan pasado todos los datos necesarios
+      if (typeof precio !== 'number' || typeof refresco !== 'number' ||
+          typeof cantidad_compartidos !== 'number' || typeof descripcion !== 'string' || typeof imagen !== 'string') {
+        return res.status(400).json({ message: 'Invalid plan data' });
+      }
+  
+      try {
+        // Crear un nuevo objeto plan sin el ID
+        const newPlan = { precio, descripcion, refresco, cantidad_compartidos, imagen };
+        
+        // Agregar el nuevo plan a la colección "planes" y obtener la referencia del documento
+        const planRef = await admin.firestore().collection('planes').add(newPlan);
+        
+        // Obtener el ID del documento generado automáticamente
+        const planId = planRef.id;
+        
+        // Responder con el mensaje de éxito y el nuevo plan, incluyendo su ID
+        return res.status(201).json({ message: 'Plan creado con éxito', plan: { id: planId, ...newPlan } });
+      } catch (error) {
+        return res.status(500).json({ message: 'Error al crear el plan', error: error.message });
+      }
+    });
   });
-});
+  
 
 // Obtener todos los planes
 exports.obtenerPlanes = functions.https.onRequest(async (req, res) => {
