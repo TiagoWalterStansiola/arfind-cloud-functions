@@ -21,10 +21,11 @@ exports.crearOrdenMercadoPago = mercadopago.crearOrdenMercadoPago;
 exports.crearOrdenMercadoPago3 = mercadopago.crearOrdenMercadoPago3;
 exports.getDispositivoByUsuario = dispositivos.getDispositivoByUsuario;
 
-exports.obtenerPlanes = planes.obtenerPlanes;
-exports.actualizarPlan = planes.actualizarPlan;
-exports.eliminarPlan = planes.eliminarPlan;
-exports.crearPlan = planes.crearPlan;
+exports.getPlanes = planes.getPlanes;
+exports.updatePlan = planes.updatePlan;
+exports.deletePlan = planes.deletePlan;
+exports.createPlan = planes.createPlan;
+  
 
 exports.loginUser = clientes.loginUser;
 exports.loginUserEmailPass = clientes.loginUserEmailPass;
