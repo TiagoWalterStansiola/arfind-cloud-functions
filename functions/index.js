@@ -2,7 +2,7 @@ const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 
 // Inicializa Firebase solo una vez
-const serviceAccount = require('C:/Users/User/Desktop/6° CUATRIMESTRE/SEMINARIO/arfind-cloud/GOOGLE_APPLICATION_CREDENTIALS.json');
+const serviceAccount = require('../GOOGLE_APPLICATION_CREDENTIALS.json');
 
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
