@@ -12,6 +12,7 @@ admin.initializeApp({
 
 // Importa las funciones de los módulos
 const clientes = require('./funciones/clientes/index');
+const planes = require('./funciones/planes/index');
 const mercadopago = require('./funciones/mercadopago/index');
 const dispositivos = require('./funciones/dispositivos/index');
 
@@ -20,6 +21,9 @@ exports.crearOrdenMercadoPago = mercadopago.crearOrdenMercadoPago;
 exports.crearOrdenMercadoPago3 = mercadopago.crearOrdenMercadoPago3;
 exports.getDispositivoByUsuario = dispositivos.getDispositivoByUsuario;
 
+exports.obtenerPlanes = planes.obtenerPlanes;
+exports.actualizarPlan = planes.actualizarPlan;
+exports.eliminarPlan = planes.eliminarPlan;
 
 exports.loginUser = clientes.loginUser;
 exports.loginUserEmailPass = clientes.loginUserEmailPass;
