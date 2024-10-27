@@ -13,7 +13,7 @@ const authenticateAdmin = async (req, res, next) => {
       const decodedToken = await admin.auth().verifyIdToken(token);
   
       // Buscar al usuario en la colección "Empleados" para verificar el rol de administrador
-      const empleadoDoc = await admin.firestore().collection('Empleados').doc(decodedToken.uid).get();
+      const empleadoDoc = await admin.firestore().collection('empleados').doc(decodedToken.uid).get();
   
       if (!empleadoDoc.exists || !empleadoDoc.data().is_admin) {
         return res.status(403).json({ message: 'Forbidden: Access is allowed only for administrators.' });

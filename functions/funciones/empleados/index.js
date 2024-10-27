@@ -30,7 +30,7 @@ const authenticateAdmin = async (req, res, next) => {
 
   try {
     const decodedToken = await admin.auth().verifyIdToken(token);
-    const empleadoDoc = await admin.firestore().collection('Empleados').doc(decodedToken.uid).get();
+    const empleadoDoc = await admin.firestore().collection('empleados').doc(decodedToken.uid).get();
     
     if (!empleadoDoc.exists || !empleadoDoc.data().is_admin) {
       return res.status(403).json({ message: 'Forbidden: Access is allowed only for administrators.' });
@@ -59,7 +59,7 @@ router.post('/createEmpleado', authenticateAdmin, async (req, res) => {
     });
     
     const newEmpleado = { email, is_admin, nombre, password };
-    await admin.firestore().collection('Empleados').doc(userRecord.uid).set(newEmpleado);
+    await admin.firestore().collection('empleados').doc(userRecord.uid).set(newEmpleado);
     
     return res.status(201).json({ message: 'Empleado creado con éxito', empleado: { id: userRecord.uid, ...newEmpleado } });
   } catch (error) {
@@ -70,7 +70,7 @@ router.post('/createEmpleado', authenticateAdmin, async (req, res) => {
 // Obtener todos los empleados
 router.get('/getEmpleados', authenticateAdmin, async (req, res) => {
   try {
-    const empleadosSnapshot = await admin.firestore().collection('Empleados').get();
+    const empleadosSnapshot = await admin.firestore().collection('empleados').get();
     const empleados = empleadosSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     return res.status(200).json({ message: 'Empleados obtenidos con éxito', data: empleados });
   } catch (error) {
@@ -87,7 +87,7 @@ router.put('/updateEmpleado', authenticateAdmin, async (req, res) => {
   }
 
   try {
-    const empleadoRef = admin.firestore().collection('Empleados').doc(id);
+    const empleadoRef = admin.firestore().collection('empleados').doc(id);
     await empleadoRef.update({ email, is_admin, nombre, password });
     return res.status(200).json({ message: 'Empleado actualizado con éxito' });
   } catch (error) {
@@ -104,7 +104,7 @@ router.delete('/deleteEmpleado', authenticateAdmin, async (req, res) => {
   }
 
   try {
-    await admin.firestore().collection('Empleados').doc(id).delete();
+    await admin.firestore().collection('empleados').doc(id).delete();
     return res.status(200).json({ message: 'Empleado eliminado con éxito' });
   } catch (error) {
     return res.status(500).json({ message: 'Error al eliminar el empleado', error: error.message });
@@ -120,27 +120,34 @@ router.post('/loginEmpleado', async (req, res) => {
   }
 
   try {
-    const empleadosRef = admin.firestore().collection('Empleados');
-    const empleadoSnapshot = await empleadosRef.where('email', '==', email).get();
+    const emailTrimmed = email.trim();
+    console.log(`Buscando empleado con email: ${emailTrimmed}`);
+    
+    const empleadosRef = admin.firestore().collection('empleados');
+    const empleadoSnapshot = await empleadosRef.where('email', '==', emailTrimmed).get();
+    
+    console.log(`Snapshot de empleados encontrado: ${empleadoSnapshot.size}`);
 
     if (empleadoSnapshot.empty) {
       return res.status(404).json({ message: 'Empleado no encontrado' });
     }
 
     const empleadoData = empleadoSnapshot.docs[0].data();
+    console.log(`Datos del empleado: ${JSON.stringify(empleadoData)}`);
 
     if (empleadoData.password !== password) {
       return res.status(401).json({ message: 'Contraseña incorrecta' });
     }
 
-    const userRecord = await admin.auth().getUserByEmail(email);
+    const userRecord = await admin.auth().getUserByEmail(emailTrimmed);
     const token = await admin.auth().createCustomToken(userRecord.uid);
 
-    // Devolver solo el token
     return res.status(200).json({ token });
   } catch (error) {
+    console.error("Error al iniciar sesión:", error);
     return res.status(500).json({ message: 'Error al iniciar sesión', error: error.message });
   }
 });
+
 
 module.exports = router;
