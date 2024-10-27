@@ -1,27 +1,37 @@
+
+// functions/index.js
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
+const express = require('express');
+const cors = require('cors');
 
-// Inicializa Firebase solo una vez
-const serviceAccount = require('../GOOGLE_APPLICATION_CREDENTIALS.json');
+// Inicializa Firebase
+admin.initializeApp();
 
-admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-    // Si estás utilizando una base de datos, descomenta la línea siguiente y proporciona la URL correcta
-    // databaseURL: 'https://<tu-base-de-datos>.firebaseio.com',
+// Inicializa la aplicación Express
+const app = express();
+
+// Configura CORS
+app.use(cors({ origin: true }));
+app.use(express.json());
+
+// Importa funciones del módulo planes
+//const planesRoutes = require('./planes/index');
+//
+//const pedidosRoutes = require('./planes/index');
+//
+//// Usar las rutas de planes
+//app.use('/planes', planesRoutes);
+//
+//app.use('/pedidos', pedidosRoutes);
+
+// Ruta para la raíz
+app.get('/', (req, res) => {
+    res.status(200).send('API en funcionamiento');
 });
 
-// Importa las funciones de los módulos
-const clientes = require('./funciones/clientes/index');
-const mercadopago = require('./funciones/mercadopago/index');
-const dispositivos = require('./funciones/dispositivos/index');
-
-// Exporta las funciones
-exports.crearOrdenMercadoPago = mercadopago.crearOrdenMercadoPago;
-exports.crearOrdenMercadoPago3 = mercadopago.crearOrdenMercadoPago3;
-exports.getDispositivoByUsuario = dispositivos.getDispositivoByUsuario;
+// Exporta la función como un endpoint de Cloud Function
+exports.arfind = functions.https.onRequest(app);
 
 
-exports.loginUser = clientes.loginUser;
-exports.loginUserEmailPass = clientes.loginUserEmailPass;
-exports.registerUser = clientes.registerUser;
-exports.getProtectedResource = clientes.getProtectedResource;
+
