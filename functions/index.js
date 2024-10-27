@@ -15,15 +15,28 @@ const app = express();
 app.use(cors({ origin: true }));
 app.use(express.json());
 
-// Importa funciones del módulo planes
-//const planesRoutes = require('./planes/index');
-//
-//const pedidosRoutes = require('./planes/index');
-//
-//// Usar las rutas de planes
-//app.use('/planes', planesRoutes);
-//
-//app.use('/pedidos', pedidosRoutes);
+
+
+/********************************
+ *                              *
+ *    IMPORTACION DE MODULOS    *                                                                     
+ *                              *
+ ********************************/
+const planesRoutes = require('./funciones/planes/index.js');
+const empleadosRoutes = require('./funciones/empleados/index.js');
+const dispositivosRoutes = require('./funciones/dispositivos/index.js');
+
+
+/********************************
+ *                              *
+ *    IMPORTACION DE RUTAS      *                                                                     
+ *                              *
+ ********************************/
+app.use('/planes', planesRoutes);
+app.use('/empleados', empleadosRoutes);
+app.use('/dispositivos', dispositivosRoutes);
+
+
 
 // Ruta para la raíz
 app.get('/', (req, res) => {
