@@ -1,16 +1,29 @@
+// functions/index.js
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
+const express = require('express');
+const cors = require('cors');
 
-// Inicializa Firebase solo una vez
+// Inicializa Firebase
 admin.initializeApp();
 
-// Importa las funciones de los módulos
-const funcion1 = require('./funcion1/index');
-const funcion2 = require('./funcion2/index');
+// Inicializa la aplicación Express
+const app = express();
 
-// Exporta las funciones
-exports.funcionDePrueba = funcion1.funcionDePrueba;
-exports.crearOrdenMercadoPago = funcion2.crearOrdenMercadoPago;
-exports.crearOrdenMercadoPago3 = funcion2.crearOrdenMercadoPago3;
+// Configura CORS
+app.use(cors({ origin: true }));
+app.use(express.json());
 
+// Importa funciones del módulo planes
+const planesRoutes = require('./funciones/planes/index');
 
+// Usar las rutas de planes
+app.use('/planes', planesRoutes);
+
+// Ruta para la raíz
+app.get('/', (req, res) => {
+    res.status(200).send('API en funcionamiento');
+});
+
+// Exporta la función como un endpoint de Cloud Function
+exports.api = functions.https.onRequest(app);
