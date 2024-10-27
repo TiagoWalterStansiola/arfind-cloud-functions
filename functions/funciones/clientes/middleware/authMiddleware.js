@@ -11,7 +11,7 @@ const authenticate = async (req, res, next) => {
 
     try {
         const decodedToken = await admin.auth().verifyIdToken(idToken);
-        req.user = decodedToken;
+        req.userId = decodedToken.uid; // Agregar el userId al objeto req
         return next();
     } catch (error) {
         console.error('Error al verificar el token:', error);
@@ -20,6 +20,3 @@ const authenticate = async (req, res, next) => {
 };
 
 module.exports = authenticate;
-
-
-
