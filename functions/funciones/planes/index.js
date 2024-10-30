@@ -56,16 +56,31 @@ router.get('/getPlanes', async (req, res) => {
 
 // Actualizar un plan
 router.put('/updatePlan', authenticateAdmin, async (req, res) => {
-  const { id, precio, descripcion, refresco, cantidad_compartidos, imagen } = req.body;
+  const { id } = req.body;
 
-  if (typeof id !== 'string' || typeof precio !== 'number' || typeof refresco !== 'number' ||
-      typeof cantidad_compartidos !== 'number' || typeof descripcion !== 'string' || typeof imagen !== 'string') {
-    return res.status(400).json({ message: 'Datos de plan inválidos' });
+  // Verificar que se proporcione el ID y que sea una cadena
+  if (typeof id !== 'string') {
+    return res.status(400).json({ message: 'Se requiere el ID del plan y debe ser un string' });
+  }
+
+  // Crear un objeto de campos a actualizar, solo con los campos presentes en la solicitud
+  const updatedFields = {};
+
+  // Comprobar si cada campo es válido y agregarlo a updatedFields
+  if (typeof precio === 'number') updatedFields.precio = precio;
+  if (typeof descripcion === 'string') updatedFields.descripcion = descripcion;
+  if (typeof refresco === 'number') updatedFields.refresco = refresco;
+  if (typeof cantidad_compartidos === 'number') updatedFields.cantidad_compartidos = cantidad_compartidos;
+  if (typeof imagen === 'string') updatedFields.imagen = imagen;
+
+  // Verificar que al menos un campo esté presente para actualizar
+  if (Object.keys(updatedFields).length === 0) {
+    return res.status(400).json({ message: 'No se proporcionaron campos válidos para actualizar' });
   }
 
   try {
     const planRef = admin.firestore().collection('planes').doc(id);
-    await planRef.update({ precio, descripcion, refresco, cantidad_compartidos, imagen });
+    await planRef.update(updatedFields);
     return res.status(200).json({ message: 'Plan actualizado con éxito' });
   } catch (error) {
     return res.status(500).json({ message: 'Error al actualizar el plan', error: error.message });
