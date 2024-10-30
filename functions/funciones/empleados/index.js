@@ -2,6 +2,9 @@
 
 const express = require('express');
 const admin = require('firebase-admin');
+const authenticate = require('../../funciones/clientes/middleware/authMiddleware');
+const authenticateAdmin = require('../../funciones/clientes/middleware/authMiddlewareAdmin');
+
 
 // Inicializa el enrutador de Express
 const router = express.Router();
@@ -19,29 +22,6 @@ const router = express.Router();
  *    Deploy del módulo:                                                                                                                                          *
  *    firebase deploy --only functions:empleados                                                                                                                  *
  ******************************************************************************************************************************************************************/
-
-// Middleware de autenticación y verificación de rol de administrador en la colección "Empleados"
-const authenticateAdmin = async (req, res, next) => {
-  const token = req.headers.authorization?.split('Bearer ')[1];
-
-  if (!token) {
-    return res.status(401).json({ message: 'Unauthorized' });
-  }
-
-  try {
-    const decodedToken = await admin.auth().verifyIdToken(token);
-    const empleadoDoc = await admin.firestore().collection('empleados').doc(decodedToken.uid).get();
-    
-    if (!empleadoDoc.exists || !empleadoDoc.data().is_admin) {
-      return res.status(403).json({ message: 'Forbidden: Access is allowed only for administrators.' });
-    }
-
-    req.user = decodedToken;
-    next();
-  } catch (error) {
-    return res.status(401).json({ message: 'Unauthorized', error: error.message });
-  }
-};
 
 // Crear un nuevo empleado
 router.post('/createEmpleado', authenticateAdmin, async (req, res) => {
@@ -111,43 +91,6 @@ router.delete('/deleteEmpleado', authenticateAdmin, async (req, res) => {
   }
 });
 
-// Login de empleado
-router.post('/loginEmpleado', async (req, res) => {
-  const { email, password } = req.body;
-
-  if (typeof email !== 'string' || typeof password !== 'string') {
-    return res.status(400).json({ message: 'Email y password son requeridos y deben ser strings' });
-  }
-
-  try {
-    const emailTrimmed = email.trim();
-    console.log(`Buscando empleado con email: ${emailTrimmed}`);
-    
-    const empleadosRef = admin.firestore().collection('empleados');
-    const empleadoSnapshot = await empleadosRef.where('email', '==', emailTrimmed).get();
-    
-    console.log(`Snapshot de empleados encontrado: ${empleadoSnapshot.size}`);
-
-    if (empleadoSnapshot.empty) {
-      return res.status(404).json({ message: 'Empleado no encontrado' });
-    }
-
-    const empleadoData = empleadoSnapshot.docs[0].data();
-    console.log(`Datos del empleado: ${JSON.stringify(empleadoData)}`);
-
-    if (empleadoData.password !== password) {
-      return res.status(401).json({ message: 'Contraseña incorrecta' });
-    }
-
-    const userRecord = await admin.auth().getUserByEmail(emailTrimmed);
-    const token = await admin.auth().createCustomToken(userRecord.uid);
-
-    return res.status(200).json({ token });
-  } catch (error) {
-    console.error("Error al iniciar sesión:", error);
-    return res.status(500).json({ message: 'Error al iniciar sesión', error: error.message });
-  }
-});
 
 
 module.exports = router;
