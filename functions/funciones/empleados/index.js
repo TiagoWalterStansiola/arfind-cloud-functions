@@ -27,18 +27,23 @@ const router = express.Router();
 router.post('/createEmpleado', authenticateAdmin, async (req, res) => {
   const { email, is_admin, nombre, password } = req.body;
 
+  // Validar que los datos sean del tipo correcto
   if (typeof email !== 'string' || typeof is_admin !== 'boolean' || typeof nombre !== 'string' || typeof password !== 'string') {
     return res.status(400).json({ message: 'Datos de empleado inválidos' });
   }
 
   try {
+    // Crear el usuario en Firebase Authentication
     const userRecord = await admin.auth().createUser({
       email,
       password,
       displayName: nombre,
     });
+
+    // Agregar el UID del usuario creado a los datos de Firestore
+    const newEmpleado = { email, is_admin, nombre, password, uid: userRecord.uid };
     
-    const newEmpleado = { email, is_admin, nombre, password };
+    // Guardar el documento en Firestore con el UID como ID del documento
     await admin.firestore().collection('empleados').doc(userRecord.uid).set(newEmpleado);
     
     return res.status(201).json({ message: 'Empleado creado con éxito', empleado: { id: userRecord.uid, ...newEmpleado } });
@@ -46,6 +51,7 @@ router.post('/createEmpleado', authenticateAdmin, async (req, res) => {
     return res.status(500).json({ message: 'Error al crear el empleado', error: error.message });
   }
 });
+
 
 // Obtener todos los empleados
 router.get('/getEmpleados', authenticateAdmin, async (req, res) => {
