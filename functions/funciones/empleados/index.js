@@ -62,34 +62,57 @@ router.get('/getEmpleados', authenticateAdmin, async (req, res) => {
 router.put('/updateEmpleado', authenticateAdmin, async (req, res) => {
   const { id, email, is_admin, nombre, password } = req.body;
 
-  if (typeof id !== 'string' || typeof email !== 'string' || typeof is_admin !== 'boolean' || typeof nombre !== 'string' || typeof password !== 'string') {
-    return res.status(400).json({ message: 'Datos de empleado inválidos' });
+  // Verificar que el ID esté presente y sea una cadena
+  if (typeof id !== 'string') {
+    return res.status(400).json({ message: 'El ID del empleado es obligatorio y debe ser una cadena' });
+  }
+
+  // Crear un objeto de campos a actualizar, solo con los campos presentes en la solicitud
+  const updatedFields = {};
+  if (typeof email === 'string') updatedFields.email = email;
+  if (typeof is_admin === 'boolean') updatedFields.is_admin = is_admin;
+  if (typeof nombre === 'string') updatedFields.nombre = nombre;
+  if (typeof password === 'string') updatedFields.password = password;
+
+  // Verificar que al menos un campo esté presente para actualizar
+  if (Object.keys(updatedFields).length === 0) {
+    return res.status(400).json({ message: 'No se proporcionaron campos para actualizar' });
   }
 
   try {
     const empleadoRef = admin.firestore().collection('empleados').doc(id);
-    await empleadoRef.update({ email, is_admin, nombre, password });
+    await empleadoRef.update(updatedFields);
     return res.status(200).json({ message: 'Empleado actualizado con éxito' });
   } catch (error) {
     return res.status(500).json({ message: 'Error al actualizar el empleado', error: error.message });
   }
 });
 
+
+
 // Eliminar un empleado
 router.delete('/deleteEmpleado', authenticateAdmin, async (req, res) => {
   const { id } = req.body;
 
+  // Validar que se proporcione el ID y que sea una cadena
   if (typeof id !== 'string') {
     return res.status(400).json({ message: 'Se requiere el ID del empleado y debe ser un string' });
   }
 
   try {
+    // Eliminar el documento del empleado en Firestore
     await admin.firestore().collection('empleados').doc(id).delete();
-    return res.status(200).json({ message: 'Empleado eliminado con éxito' });
+
+    // Eliminar el usuario del sistema de autenticación
+    await admin.auth().deleteUser(id);
+
+    return res.status(200).json({ message: 'Empleado eliminado con éxito de Firestore y Authentication' });
   } catch (error) {
     return res.status(500).json({ message: 'Error al eliminar el empleado', error: error.message });
   }
 });
+
+
 
 
 
