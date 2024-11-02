@@ -1,7 +1,7 @@
 const express = require('express');
 const admin = require('firebase-admin');
 const authenticate = require('../../funciones/clientes/middleware/authMiddleware');
-
+const authenticateEmpleado = require('../../funciones/clientes/middleware/authMiddlewareEmpleado');
 const router = express.Router();
 
 // Create a new order (secure route)
@@ -37,7 +37,7 @@ router.get('/misPedidos', authenticate, async (req, res) => {
 });
 
 // Get details of a specific order by ID
-router.get('/pedidos/:id', authenticate, async (req, res) => {
+router.get('/pedidos/:id', authenticateEmpleado, async (req, res) => {
     const { id } = req.params;
     try {
         const docRef = await admin.firestore().collection('pedidos').doc(id).get();
@@ -52,7 +52,7 @@ router.get('/pedidos/:id', authenticate, async (req, res) => {
 });
 
 // Update the status of an order
-router.patch('/pedidos/:id/status', authenticate, async (req, res) => {
+router.patch('/pedidos/:id/status', authenticateEmpleado, async (req, res) => {
     const { id } = req.params;
     const { status } = req.body; // Debe ser "Entregado" o "No Entregado"
     if (!['Entregado', 'No Entregado'].includes(status)) {
