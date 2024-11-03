@@ -1,21 +1,20 @@
+// funciones/mercadoPago/mercadoPagoRoutes.js
 const functions = require('firebase-functions');
 const { MercadoPagoConfig, Preference } = require('mercadopago');
 const admin = require('firebase-admin');
-
-
+const express = require('express');
 
 // Configuración de las credenciales de acceso a Mercado Pago
-const client = new MercadoPagoConfig({ accessToken: 'APP_USR-2952799681043987-032414-caf1022a4fa67d3579049f715aa6afb3-1742313862' });
+const client = new MercadoPagoConfig({ accessToken: 'APP_USR-7557743885047413-110316-06069ee599fb83bfed6452ad09a1e0a5-2076128946' });
 
-// Exporta la función de Firebase CHECKOUT Mercadopago estatico
-exports.crearOrdenMercadoPago = functions.https.onRequest(async (req, res) => {
+// Inicializa el enrutador de Express
+const router = express.Router();
+
+// Ruta para crear una orden de Mercado Pago estática
+router.post('/crearOrdenEstatica', async (req, res) => {
     try {
-        // Crea la instancia de la preferencia
         const preference = new Preference(client);
-
-        // Configura los parámetros para la preferencia
         const preferenceParams = {
-
             body: {
                 back_urls: {
                     success: 'tuapp://retorno-pago?estado=exitoso',
@@ -24,44 +23,20 @@ exports.crearOrdenMercadoPago = functions.https.onRequest(async (req, res) => {
                 },
                 payment_methods: {
                     excluded_payment_methods: [
-                        {
-                            id: "amex"
-                        },
-                        {
-                            id: "argencard"
-                        },
-                        {
-                            id: "cabal"
-                        },
-                        {
-                            id: "cmr"
-                        },
-                        {
-                            id: "cencosud"
-                        },
-                        {
-                            id: "cordobesa"
-                        },
-                        {
-                            id: "diners"
-                        },
-                        {
-                            id: "naranja"
-                        },
-                        {
-                            id: "tarshop"
-                        },
-                        {
-                            id: "debcabal"
-                        },
-                        {
-                            id: "maestro"
-                        }
+                        { id: "amex" },
+                        { id: "argencard" },
+                        { id: "cabal" },
+                        { id: "cmr" },
+                        { id: "cencosud" },
+                        { id: "cordobesa" },
+                        { id: "diners" },
+                        { id: "naranja" },
+                        { id: "tarshop" },
+                        { id: "debcabal" },
+                        { id: "maestro" }
                     ],
                     excluded_payment_types: [
-                        {
-                            id: "ticket"
-                        }
+                        { id: "ticket" }
                     ],
                     installments: 1
                 },
@@ -74,7 +49,6 @@ exports.crearOrdenMercadoPago = functions.https.onRequest(async (req, res) => {
                         quantity: 2,
                         currency_id: 'ARS',
                         unit_price: 1
-
                     },
                     {
                         title: 'Mi producto 2',
@@ -85,82 +59,45 @@ exports.crearOrdenMercadoPago = functions.https.onRequest(async (req, res) => {
                         currency_id: 'ARS',
                         unit_price: 2
                     }
-                ],
-
+                ]
             }
         };
-
-        // Crea la preferencia en Mercado Pago
         const preferenceResponse = await preference.create(preferenceParams);
-
-        console.log('Respuesta de la preferencia:', preferenceResponse);
-
-
-
         res.redirect(302, preferenceResponse.init_point);
     } catch (error) {
         console.error('Error al crear la orden de Mercado Pago:', error);
         res.status(500).send('Error interno del servidor');
     }
 });
-// Exporta la función de Firebase CHECKOUT Mercadopago dianmico, recibe los valores de la app (Android/IOS)
-exports.crearOrdenMercadoPago3 = functions.https.onRequest(async (req, res) => {
-    try {
-        // Obtén los parámetros de la solicitud HTTP
-        const { nombreProducto, descripcionProducto, imagenProducto, cantidad, precio } = req.body;
 
-        // Crea la instancia de la preferencia
+// Ruta para crear una orden de Mercado Pago dinámica
+router.post('/crearOrdenDinamica', async (req, res) => {
+    try {
+        const { nombreProducto, descripcionProducto, imagenProducto, cantidad, precio } = req.body;
         const preference = new Preference(client);
-        
-        // Configura los parámetros para la preferencia
         const preferenceParams = {
             body: {
                 back_urls: {
-                    
                     success: 'tuapp://retorno-pago?estado=exitoso',
                     failure: 'tuapp://retorno-fallo?estado=fallo',
                     pending: 'tuapp://retorno-pendiente?estado=pendiente'
                 },
                 payment_methods: {
                     excluded_payment_methods: [
-                        {
-                            id: "amex"
-                        },
-                        {
-                            id: "argencard"
-                        },
-                        {
-                            id: "cabal"
-                        },
-                        {
-                            id: "cmr"
-                        },
-                        {
-                            id: "cencosud"
-                        },
-                        {
-                            id: "cordobesa"
-                        },
-                        {
-                            id: "diners"
-                        },
-                        {
-                            id: "naranja"
-                        },
-                        {
-                            id: "tarshop"
-                        },
-                        {
-                            id: "debcabal"
-                        },
-                        {
-                            id: "maestro"
-                        }
+                        { id: "amex" },
+                        { id: "argencard" },
+                        { id: "cabal" },
+                        { id: "cmr" },
+                        { id: "cencosud" },
+                        { id: "cordobesa" },
+                        { id: "diners" },
+                        { id: "naranja" },
+                        { id: "tarshop" },
+                        { id: "debcabal" },
+                        { id: "maestro" }
                     ],
                     excluded_payment_types: [
-                        {
-                            id: "ticket"
-                        }
+                        { id: "ticket" }
                     ],
                     installments: 1
                 },
@@ -173,34 +110,15 @@ exports.crearOrdenMercadoPago3 = functions.https.onRequest(async (req, res) => {
                         currency_id: 'ARS',
                         unit_price: precio
                     }
-                ],
-                
+                ]
             }
         };
-
-        // Crea la preferencia en Mercado Pago
         const preferenceResponse = await preference.create(preferenceParams);
-
-        console.log('Respuesta de la preferencia:', preferenceResponse);
-
-        // Redirige al usuario al checkout de Mercado Pago
-
         res.status(200).json({ url: preferenceResponse.init_point });
-
-        //res.redirect(302, preferenceResponse.init_point);
     } catch (error) {
         console.error('Error al crear la orden de Mercado Pago:', error);
         res.status(500).send('Error interno del servidor');
     }
 });
 
-
-
-
-  
-
-
-
-
-
-
+module.exports = router;
