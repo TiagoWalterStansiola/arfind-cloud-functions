@@ -78,9 +78,9 @@ router.post('/crearOrdenDinamica', async (req, res) => {
         const preferenceParams = {
             body: {
                 back_urls: {
-                    success: 'tuapp://retorno-pago?estado=exitoso',
-                    failure: 'tuapp://retorno-fallo?estado=fallo',
-                    pending: 'tuapp://retorno-pendiente?estado=pendiente'
+                    success: 'tuapp://airfind-retorno-pago?estado=exitoso',
+                    failure: 'tuapp://airfind-retorno-fallo?estado=fallo',
+                    pending: 'tuapp://airfind-retorno-pendiente?estado=pendiente'
                 },
                 payment_methods: {
                     excluded_payment_methods: [
