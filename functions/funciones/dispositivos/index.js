@@ -9,26 +9,41 @@ const router = express.Router();
 
 
 // Rutas de dispositivos
+// Rutas de dispositivos
+// Obtener dispositivos por usuario autenticado usando solo el token
 // Obtener dispositivos por usuario autenticado usando solo el token
 router.get("/getDispositivosByUsuario", authenticate, async (req, res) => {
-  const usuarioId = req.user.uid; // Obtiene el uid del usuario autenticado
+  // Verificamos que req.userId esté definido
+  if (!req.userId) {
+    return res.status(401).send("Usuario no autenticado o token inválido.");
+  }
+
+  const usuarioId = req.userId;
 
   try {
-    // Busca todos los dispositivos en Firestore asociados al usuario autenticado
-    const dispositivoSnapshot = await db.collection('dispositivos').where('usuario_id', '==', db.doc(`Usuarios/${usuarioId}`)).get();
+    // Realiza la consulta con el uid del usuario como string directo
+    const dispositivoSnapshot = await db
+      .collection("dispositivos")
+      .where("usuario_id", "==", usuarioId) // Compara el uid como string
+      .get();
 
     if (dispositivoSnapshot.empty) {
       return res.status(404).send("No se encontraron dispositivos para este usuario.");
     }
 
-    // Recorre todos los dispositivos encontrados y los almacena en un array
-    const dispositivos = dispositivoSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    // Mapea los documentos encontrados a un array de dispositivos
+    const dispositivos = dispositivoSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
     return res.status(200).json(dispositivos);
   } catch (error) {
-    console.error("Error al obtener los dispositivos:", error);
+    console.error("Error al obtener los dispositivos:", error.message); // Imprime el mensaje de error
     return res.status(500).send("Error al obtener los dispositivos.");
   }
 });
+
+
 // Obtener dispositivos donde el usuario está invitado
 router.get("/getDispositivosInvitados", authenticate, async (req, res) => {
   const usuarioId = req.userId; // Obtiene el uid del usuario autenticado
