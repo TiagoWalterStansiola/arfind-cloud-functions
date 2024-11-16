@@ -1,114 +1,43 @@
-//CLIENTES
-const functions = require('firebase-functions');
+const express = require('express');
 const admin = require('firebase-admin');
+const router = express.Router();
+const authenticate = require('./middleware/authMiddleware'); // Importa tu middleware de autenticación
 
-exports.registerUser = functions.https.onRequest(async (req, res) => {
-    const { email, password, displayName } = req.body;
-  
-    if (!email || !password) {
-      return res.status(400).send('Email and password are required.');
-    }
-  
-    try {
-      const userRecord = await admin.auth().createUser({
-        email: email,
-        password: password,
-        displayName: displayName,
-      });
-  
-      // Opcional: puedes también generar un token de acceso para el usuario recién registrado
-      const token = await admin.auth().createCustomToken(userRecord.uid);
-  
-      return res.status(201).send({ message: 'User registered successfully', token: token });
-    } catch (error) {
-      return res.status(500).send(`Error registering user: ${error.message}`);
-    }
-  });
+// Endpoint para actualizar la información del usuario
+router.put('/updateCliente', authenticate, async (req, res) => {
+    const { userId } = req; // Obtener el UID del usuario autenticado desde el middleware
+    const { nombre, apellido, telefono, edad } = req.body; // Datos enviados en la solicitud
 
-  exports.loginUser = functions.https.onRequest(async (req, res) => {
-    const { uid } = req.body;
-  
-    if (!uid) {
-      return res.status(400).send('UID is required.');
-    }
-  
-    try {
-      // Crear un token personalizado
-      const token = await admin.auth().createCustomToken(uid);
-  
-      return res.status(200).send({ token });
-    } catch (error) {
-      return res.status(500).send(`Error logging in user: ${error.message}`);
-    }
-  });
-
-
-  exports.loginUserEmailPass = functions.https.onRequest(async (req, res) => {
-    const { email, password } = req.body; // Obtén el email y la contraseña del cuerpo de la solicitud
-
-    if (!email || !password) {
-        return res.status(400).send('Email and password are required.');
+    if (!nombre && !apellido && !telefono && !edad) {
+        return res.status(400).json({ message: 'Debe proporcionar al menos un campo para actualizar' });
     }
 
     try {
-        // Verifica las credenciales del usuario
-        const userCredential = await admin.auth().getUserByEmail(email);
-        
-        // Si las credenciales son válidas, puedes generar un token personalizado
-        const token = await admin.auth().createCustomToken(userCredential.uid);
+        // Referencia al documento del usuario en Firestore
+        const userRef = admin.firestore().collection('usuarios').doc(userId);
 
-        return res.status(200).send({ token });
+        // Verificar si el usuario existe
+        const userDoc = await userRef.get();
+        if (!userDoc.exists) {
+            return res.status(404).json({ message: 'Usuario no encontrado' });
+        }
+
+        // Construir el objeto con los campos a actualizar
+        const updates = {};
+        if (nombre) updates.nombre = nombre;
+        if (apellido) updates.apellido = apellido;
+        if (telefono) updates.telefono = telefono;
+        if (edad) updates.edad = edad;
+        updates.fecha_actualizacion = admin.firestore.FieldValue.serverTimestamp(); // Agregar timestamp de actualización
+
+        // Actualizar el documento del usuario en Firestore
+        await userRef.update(updates);
+
+        return res.status(200).json({ message: 'Información actualizada con éxito', updates });
     } catch (error) {
-        return res.status(500).send(`Error logging in user: ${error.message}`);
+        console.error('Error al actualizar la información del usuario:', error);
+        return res.status(500).json({ message: 'Error al actualizar la información del usuario', error: error.message });
     }
 });
 
-
-
-//----------------------------vemos donde lo ponemos desp----------------------------------------------------
-
-  // Middleware para verificar si el usuario está autenticado
-const authenticate = async (req, res, next) => {
-    const token = req.headers.authorization?.split('Bearer ')[1];
-  
-    if (!token) {
-      return res.status(401).send('Unauthorized');
-    }
-  
-    try {
-      const decodedToken = await admin.auth().verifyIdToken(token);
-      req.user = decodedToken;
-      next();  // Si la verificación es exitosa, se continúa con la ejecución
-    } catch (error) {
-      return res.status(401).send('Unauthorized');
-    }
-  };
-//----------------------------enndpoint de prueba----------------------------------------------------
-
-  // Ejemplo de Cloud Function protegida
-  exports.getProtectedResource = functions.https.onRequest((req, res) => {
-    authenticate(req, res, () => {
-      // Si el usuario está autenticado, aquí puedes responder con los recursos.
-      res.status(200).send(`Hola ${req.user.name}, tienes acceso a este recurso.`);
-    });
-  });
-
-
-
-
-//----------prueba en Client
-
-//  firebase.auth().currentUser.getIdToken(/* forceRefresh */ true).then((idToken) => {
-//    // Enviar este token en el encabezado de autorización
-//    fetch('https://<tu-cloud-function-url>', {
-//      method: 'GET',
-//      headers: {
-//        'Authorization': `Bearer ${idToken}`
-//      }
-//    }).then(response => response.json())
-//      .then(data => console.log(data))
-//      .catch(error => console.error(error));
-//  }).catch((error) => {
-//    console.error('Error al obtener el token:', error);
-//  });
-  
+module.exports = router;
