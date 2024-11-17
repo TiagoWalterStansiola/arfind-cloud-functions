@@ -120,5 +120,54 @@ router.post('/crearOrdenDinamica', async (req, res) => {
         res.status(500).send('Error interno del servidor');
     }
 });
+router.post('/crearOrdenDinamicaWeb', async (req, res) => {
+    try {
+        const { nombreProducto, descripcionProducto, imagenProducto, cantidad, precio } = req.body;
+        const preference = new Preference(client);
+        const preferenceParams = {
+            body: {
+                back_urls: {
+                    success: 'tuapp://airfind-retorno-pago?estado=exitoso',
+                    failure: 'tuapp://airfind-retorno-fallo?estado=fallo',
+                    pending: 'tuapp://airfind-retorno-pendiente?estado=pendiente'
+                },
+                payment_methods: {
+                    excluded_payment_methods: [
+                        { id: "amex" },
+                        { id: "argencard" },
+                        { id: "cabal" },
+                        { id: "cmr" },
+                        { id: "cencosud" },
+                        { id: "cordobesa" },
+                        { id: "diners" },
+                        { id: "naranja" },
+                        { id: "tarshop" },
+                        { id: "debcabal" },
+                        { id: "maestro" }
+                    ],
+                    excluded_payment_types: [
+                        { id: "ticket" }
+                    ],
+                    installments: 1
+                },
+                items: [
+                    {
+                        title: nombreProducto,
+                        description: descripcionProducto,
+                        picture_url: imagenProducto,
+                        quantity: cantidad,
+                        currency_id: 'ARS',
+                        unit_price: precio
+                    }
+                ]
+            }
+        };
+        const preferenceResponse = await preference.create(preferenceParams);
+        res.status(200).json({ url: preferenceResponse.init_point });
+    } catch (error) {
+        console.error('Error al crear la orden de Mercado Pago:', error);
+        res.status(500).send('Error interno del servidor');
+    }
+});
 
 module.exports = router;

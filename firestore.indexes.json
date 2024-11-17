@@ -1,0 +1,21 @@
+{
+    "indexes": [
+      {
+        "collectionGroup": "productos",
+        "queryScope": "COLLECTION",
+        "fields": [
+          { "fieldPath": "precio", "order": "ASCENDING" },
+          { "fieldPath": "titulo", "order": "ASCENDING" }
+        ]
+      },
+      {
+        "collectionGroup": "usuarios",
+        "queryScope": "COLLECTION",
+        "fields": [
+          { "fieldPath": "nombre", "order": "ASCENDING" },
+          { "fieldPath": "email", "order": "ASCENDING" }
+        ]
+      }
+    ]
+  }
+  

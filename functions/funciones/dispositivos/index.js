@@ -9,8 +9,6 @@ const router = express.Router();
 
 
 // Rutas de dispositivos
-// Rutas de dispositivos
-// Obtener dispositivos por usuario autenticado usando solo el token
 // Obtener dispositivos por usuario autenticado usando solo el token
 router.get("/getDispositivosByUsuario", authenticate, async (req, res) => {
   // Verificamos que req.userId esté definido
@@ -70,20 +68,40 @@ router.get("/getDispositivosInvitados", authenticate, async (req, res) => {
 
 // Crear dispositivo
 router.post("/createDispositivo", authenticateAdmin, async (req, res) => {
-  const {numero_telefonico } = req.body;
+  const { numero_telefonico, tipo_producto } = req.body;
+
+  if (!numero_telefonico || !tipo_producto) {
+    return res.status(400).json({ 
+      message: 'Los campos numero_telefonico y tipo_producto son obligatorios.' 
+    });
+  }
 
   try {
     const newDevice = {
       numero_telefonico,
-      fecha_creacion: admin.firestore.Timestamp.now(),
+      tipo_producto,
+      apodo: "", // Campo vacío por defecto
+      bateria: null, // Valor inicial
+      codigo_invitado: "", // Campo vacío
+      fecha_creacion: admin.firestore.Timestamp.now(), // Fecha de creación actual
+      plan_id: null, // Inicialmente sin plan asociado
+      ubicacion: null, // Inicialmente sin ubicación
+      ult_actualizacion: admin.firestore.Timestamp.now(), // Fecha de actualización actual
+      usuario_id: null, // Inicialmente sin usuario asociado
+      usuarios_invitados: [], // Lista vacía de usuarios invitados
     };
 
     const deviceRef = await db.collection('dispositivos').add(newDevice);
-    return res.status(201).send({ message: 'Dispositivo creado exitosamente', deviceId: deviceRef.id });
+    return res.status(201).send({ 
+      message: 'Dispositivo creado exitosamente', 
+      deviceId: deviceRef.id, 
+      dispositivo: newDevice 
+    });
   } catch (error) {
     return res.status(500).send(`Error al crear dispositivo: ${error.message}`);
   }
 });
+
 
 // Actualizar dispositivo
 router.put("/updateDispositivo", authenticateAdmin, async (req, res) => {
@@ -107,13 +125,13 @@ router.put("/updateDispositivo", authenticateAdmin, async (req, res) => {
 
     // Solo agregar los campos que están presentes en updatedData
     if (updatedData.usuario_id) {
-      updatedFields.usuario_id = db.doc(`Usuarios/${updatedData.usuario_id}`);
+      updatedFields.usuario_id = db.doc(`usuarios/${updatedData.usuario_id}`);
     }
     if (updatedData.plan_id) {
-      updatedFields.plan_id = db.doc(`Planes/${updatedData.plan_id}`);
+      updatedFields.plan_id = db.doc(`planes/${updatedData.plan_id}`);
     }
     if (updatedData.usuarios_invitados) {
-      updatedFields.usuarios_invitados = updatedData.usuarios_invitados.map(uid => db.doc(`Usuarios/${uid}`));
+      updatedFields.usuarios_invitados = updatedData.usuarios_invitados.map(uid => db.doc(`usuarios/${uid}`));
     }
     if (updatedData.ubicacion) {
       updatedFields.ubicacion = new admin.firestore.GeoPoint(updatedData.ubicacion.latitude, updatedData.ubicacion.longitude);
