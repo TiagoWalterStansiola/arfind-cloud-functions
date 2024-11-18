@@ -65,7 +65,6 @@ router.get("/getDispositivosInvitados", authenticate, async (req, res) => {
   }
 });
 
-
 // Crear dispositivo
 router.post("/createDispositivo", authenticateAdmin, async (req, res) => {
   const { numero_telefonico, tipo_producto } = req.body;
@@ -77,10 +76,23 @@ router.post("/createDispositivo", authenticateAdmin, async (req, res) => {
   }
 
   try {
+    // Construir la referencia al producto
+    const tipoProductoRef = db.collection('productos').doc(tipo_producto);
+
+    // Verificar si el producto existe antes de asociarlo
+    const tipoProductoDoc = await tipoProductoRef.get();
+    if (!tipoProductoDoc.exists) {
+      return res.status(404).json({ message: 'El tipo de producto proporcionado no existe.' });
+    }
+
+    // Obtener el título del producto para asignarlo como apodo
+    const tipoProductoData = tipoProductoDoc.data();
+    const apodo = tipoProductoData.titulo || "Producto sin título"; // Usar el título o un valor predeterminado
+
     const newDevice = {
       numero_telefonico,
-      tipo_producto,
-      apodo: "", // Campo vacío por defecto
+      tipo_producto: tipoProductoRef, // Guardar como referencia
+      apodo, // Asignar apodo basado en el título del tipo_producto
       bateria: null, // Valor inicial
       codigo_invitado: "", // Campo vacío
       fecha_creacion: admin.firestore.Timestamp.now(), // Fecha de creación actual
@@ -91,7 +103,9 @@ router.post("/createDispositivo", authenticateAdmin, async (req, res) => {
       usuarios_invitados: [], // Lista vacía de usuarios invitados
     };
 
+    // Guardar el dispositivo en Firestore
     const deviceRef = await db.collection('dispositivos').add(newDevice);
+
     return res.status(201).send({ 
       message: 'Dispositivo creado exitosamente', 
       deviceId: deviceRef.id, 
@@ -101,8 +115,6 @@ router.post("/createDispositivo", authenticateAdmin, async (req, res) => {
     return res.status(500).send(`Error al crear dispositivo: ${error.message}`);
   }
 });
-
-
 // Actualizar dispositivo
 router.put("/updateDispositivo", authenticateAdmin, async (req, res) => {
   const { deviceId, updatedData } = req.body; // Obtener el ID del dispositivo y los datos a actualizar del cuerpo de la solicitud
@@ -120,23 +132,114 @@ router.put("/updateDispositivo", authenticateAdmin, async (req, res) => {
       return res.status(404).json({ message: 'Dispositivo no encontrado' });
     }
 
-    // Crear un objeto para almacenar los campos actualizados
+    const dispositivoData = dispositivoDoc.data();
     const updatedFields = {};
 
-    // Solo agregar los campos que están presentes en updatedData
+    // Validar y agregar usuario_id
     if (updatedData.usuario_id) {
-      updatedFields.usuario_id = db.doc(`usuarios/${updatedData.usuario_id}`);
+      const usuarioRef = db.collection('usuarios').doc(updatedData.usuario_id);
+      const usuarioDoc = await usuarioRef.get();
+      if (!usuarioDoc.exists) {
+        return res.status(400).json({ message: 'El usuario_id proporcionado no existe.' });
+      }
+      updatedFields.usuario_id = usuarioRef;
     }
+
+    // Validar y agregar plan_id
     if (updatedData.plan_id) {
-      updatedFields.plan_id = db.doc(`planes/${updatedData.plan_id}`);
+      const planRef = db.collection('planes').doc(updatedData.plan_id);
+      const planDoc = await planRef.get();
+      if (!planDoc.exists) {
+        return res.status(400).json({ message: 'El plan_id proporcionado no existe.' });
+      }
+      updatedFields.plan_id = planRef;
     }
+
+    // Validar y agregar tipo_producto
+    if (updatedData.tipo_producto) {
+      const productoRef = db.collection('productos').doc(updatedData.tipo_producto);
+      const productoDoc = await productoRef.get();
+      if (!productoDoc.exists) {
+        return res.status(400).json({ message: 'El tipo_producto proporcionado no existe.' });
+      }
+      updatedFields.tipo_producto = productoRef;
+    }
+
+    // Validar usuarios_invitados
     if (updatedData.usuarios_invitados) {
-      updatedFields.usuarios_invitados = updatedData.usuarios_invitados.map(uid => db.doc(`usuarios/${uid}`));
+      const invitadosSet = new Set();
+      const invitadosValidos = [];
+
+      // Verificar el plan actual del dispositivo
+      const planId = dispositivoData.plan_id?.id || updatedData.plan_id;
+      if (!planId) {
+        return res.status(400).json({ message: 'El dispositivo debe tener un plan asociado para validar los invitados.' });
+      }
+
+      const planRef = db.collection('planes').doc(planId);
+      const planDoc = await planRef.get();
+      if (!planDoc.exists) {
+        return res.status(400).json({ message: 'El plan asociado no existe.' });
+      }
+
+      const cantidadMaxInvitados = planDoc.data().cantidad_compartidos || 0;
+
+      // Validar cada invitado
+      for (const uid of updatedData.usuarios_invitados) {
+        if (uid === updatedData.usuario_id) {
+          return res.status(400).json({ message: 'El usuario propietario no puede ser invitado.' });
+        }
+
+        if (invitadosSet.has(uid)) {
+          return res.status(400).json({ message: `El usuario invitado con ID ${uid} está repetido.` });
+        }
+
+        const usuarioRef = db.collection('usuarios').doc(uid);
+        const usuarioDoc = await usuarioRef.get();
+        if (!usuarioDoc.exists) {
+          return res.status(400).json({ message: `El usuario invitado con ID ${uid} no existe.` });
+        }
+
+        invitadosSet.add(uid);
+        invitadosValidos.push(usuarioRef);
+
+        // Validar el número máximo de invitados
+        if (invitadosValidos.length > cantidadMaxInvitados) {
+          return res.status(400).json({ 
+            message: `El número máximo de usuarios invitados permitidos para este plan es ${cantidadMaxInvitados}.`
+          });
+        }
+      }
+
+      updatedFields.usuarios_invitados = invitadosValidos;
     }
+
+    // Validar y agregar ubicación
     if (updatedData.ubicacion) {
-      updatedFields.ubicacion = new admin.firestore.GeoPoint(updatedData.ubicacion.latitude, updatedData.ubicacion.longitude);
+      const { latitude, longitude } = updatedData.ubicacion;
+      if (typeof latitude !== 'number' || typeof longitude !== 'number') {
+        return res.status(400).json({ message: 'La ubicación debe contener latitude y longitude como números.' });
+      }
+      updatedFields.ubicacion = new admin.firestore.GeoPoint(latitude, longitude);
     }
-    // Agregar la fecha de la última actualización
+
+    // Validar y agregar apodo
+    if (updatedData.apodo) {
+      if (typeof updatedData.apodo !== 'string' || updatedData.apodo.trim() === '') {
+        return res.status(400).json({ message: 'El apodo debe ser un string no vacío.' });
+      }
+      updatedFields.apodo = updatedData.apodo.trim();
+    }
+
+    // Validar y agregar código invitado
+    if (updatedData.codigo_invitado) {
+      if (typeof updatedData.codigo_invitado !== 'string' || updatedData.codigo_invitado.trim() === '') {
+        return res.status(400).json({ message: 'El código invitado debe ser un string no vacío.' });
+      }
+      updatedFields.codigo_invitado = updatedData.codigo_invitado.trim();
+    }
+
+    // Actualizar el campo de última actualización
     updatedFields.ult_actualizacion = admin.firestore.Timestamp.now();
 
     // Verificar que al menos un campo esté presente para actualizar
@@ -146,11 +249,16 @@ router.put("/updateDispositivo", authenticateAdmin, async (req, res) => {
 
     // Actualizar el documento del dispositivo en Firestore
     await dispositivoRef.update(updatedFields);
+
     return res.status(200).send({ message: 'Dispositivo actualizado exitosamente' });
   } catch (error) {
-    return res.status(500).send(`Error al actualizar dispositivo: ${error.message}`);
+    console.error('Error al actualizar dispositivo:', error);
+    return res.status(500).send({ message: 'Error al actualizar dispositivo', error: error.message });
   }
 });
+
+
+
 
 
 // Eliminar dispositivo
