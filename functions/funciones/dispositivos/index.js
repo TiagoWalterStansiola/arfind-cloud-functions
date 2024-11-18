@@ -28,10 +28,26 @@ router.get("/getDispositivosByUsuario", authenticate, async (req, res) => {
       return res.status(404).send("No se encontraron dispositivos para este usuario.");
     }
 
-    const dispositivos = dispositivoSnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
+    // Obtener los dispositivos y agregar refresco desde el plan
+    const dispositivos = await Promise.all(
+      dispositivoSnapshot.docs.map(async doc => {
+        const data = doc.data();
+        let refresco = null;
+
+        if (data.plan_id) {
+          const planDoc = await db.collection("planes").doc(data.plan_id).get();
+          if (planDoc.exists) {
+            refresco = planDoc.data().refresco || null;
+          }
+        }
+
+        return {
+          id: doc.id,
+          ...data,
+          refresco, // Agregar refresco
+        };
+      })
+    );
 
     return res.status(200).json(dispositivos);
   } catch (error) {
@@ -39,6 +55,7 @@ router.get("/getDispositivosByUsuario", authenticate, async (req, res) => {
     return res.status(500).send("Error al obtener los dispositivos.");
   }
 });
+
 
 
 
@@ -62,10 +79,26 @@ router.get("/getDispositivosInvitados", authenticate, async (req, res) => {
       return res.status(404).json({ message: "No se encontraron dispositivos en los que este usuario está invitado." });
     }
 
-    const dispositivos = dispositivoSnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
+    // Obtener los dispositivos y agregar refresco desde el plan
+    const dispositivos = await Promise.all(
+      dispositivoSnapshot.docs.map(async doc => {
+        const data = doc.data();
+        let refresco = null;
+
+        if (data.plan_id) {
+          const planDoc = await db.collection("planes").doc(data.plan_id).get();
+          if (planDoc.exists) {
+            refresco = planDoc.data().refresco || null;
+          }
+        }
+
+        return {
+          id: doc.id,
+          ...data,
+          refresco, // Agregar refresco
+        };
+      })
+    );
 
     return res.status(200).json(dispositivos);
   } catch (error) {
@@ -73,6 +106,7 @@ router.get("/getDispositivosInvitados", authenticate, async (req, res) => {
     return res.status(500).json({ message: "Error al obtener los dispositivos invitados.", error: error.message });
   }
 });
+
 
 
 

@@ -25,16 +25,16 @@ const router = express.Router();
 
 // Crear un nuevo plan
 router.post('/createPlan', authenticateAdmin, async (req, res) => {
-  const { precio, descripcion, refresco, cantidad_compartidos, imagen } = req.body;
+  const { nombre, precio, descripcion, refresco, cantidad_compartidos, imagen } = req.body;
 
   // Verificar que se hayan pasado todos los datos necesarios
-  if (typeof precio !== 'number' || typeof refresco !== 'number' ||
+  if (typeof nombre !== 'string' || typeof precio !== 'number' || typeof refresco !== 'number' ||
       typeof cantidad_compartidos !== 'number' || typeof descripcion !== 'string' || typeof imagen !== 'string') {
     return res.status(400).json({ message: 'Datos de plan inválidos' });
   }
 
   try {
-    const newPlan = { precio, descripcion, refresco, cantidad_compartidos, imagen };
+    const newPlan = { nombre, precio, descripcion, refresco, cantidad_compartidos, imagen };
     const planRef = await admin.firestore().collection('planes').add(newPlan);
     const planId = planRef.id;
     return res.status(201).json({ message: 'Plan creado con éxito', plan: { id: planId, ...newPlan } });
@@ -42,6 +42,7 @@ router.post('/createPlan', authenticateAdmin, async (req, res) => {
     return res.status(500).json({ message: 'Error al crear el plan', error: error.message });
   }
 });
+
 
 // Obtener todos los planes
 router.get('/getPlanes', async (req, res) => {
@@ -54,9 +55,10 @@ router.get('/getPlanes', async (req, res) => {
   }
 });
 
+
 // Actualizar un plan
 router.put('/updatePlan', authenticateAdmin, async (req, res) => {
-  const { id } = req.body;
+  const { id, nombre, precio, descripcion, refresco, cantidad_compartidos, imagen } = req.body;
 
   // Verificar que se proporcione el ID y que sea una cadena
   if (typeof id !== 'string') {
@@ -67,6 +69,7 @@ router.put('/updatePlan', authenticateAdmin, async (req, res) => {
   const updatedFields = {};
 
   // Comprobar si cada campo es válido y agregarlo a updatedFields
+  if (typeof nombre === 'string') updatedFields.nombre = nombre;
   if (typeof precio === 'number') updatedFields.precio = precio;
   if (typeof descripcion === 'string') updatedFields.descripcion = descripcion;
   if (typeof refresco === 'number') updatedFields.refresco = refresco;
@@ -86,6 +89,7 @@ router.put('/updatePlan', authenticateAdmin, async (req, res) => {
     return res.status(500).json({ message: 'Error al actualizar el plan', error: error.message });
   }
 });
+
 
 // Eliminar un plan
 router.delete('/deletePlan', authenticateAdmin, async (req, res) => {
