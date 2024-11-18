@@ -19,10 +19,13 @@ router.get("/getDispositivosByUsuario", authenticate, async (req, res) => {
   const usuarioId = req.userId;
 
   try {
-    // Realiza la consulta con el uid del usuario como string directo
+    // Crear la referencia al usuario en Firestore
+    const usuarioRef = db.collection("usuarios").doc(usuarioId);
+
+    // Realiza la consulta con la referencia al usuario
     const dispositivoSnapshot = await db
       .collection("dispositivos")
-      .where("usuario_id", "==", usuarioId) // Compara el uid como string
+      .where("usuario_id", "==", usuarioRef) // Compara contra la referencia al usuario
       .get();
 
     if (dispositivoSnapshot.empty) {
@@ -34,12 +37,14 @@ router.get("/getDispositivosByUsuario", authenticate, async (req, res) => {
       id: doc.id,
       ...doc.data()
     }));
+
     return res.status(200).json(dispositivos);
   } catch (error) {
     console.error("Error al obtener los dispositivos:", error.message); // Imprime el mensaje de error
     return res.status(500).send("Error al obtener los dispositivos.");
   }
 });
+
 
 
 // Obtener dispositivos donde el usuario está invitado
@@ -325,17 +330,47 @@ router.put("/generateCodigoInvitado", authenticate, async (req, res) => {
       return res.status(404).json({ message: 'Dispositivo no encontrado' });
     }
 
-    // Generar un código de 6 dígitos aleatorios
-    const codigoInvitado = Math.floor(100000 + Math.random() * 900000).toString();
+    const dispositivoData = dispositivoDoc.data();
+
+    // Validar que el usuario autenticado sea el propietario del dispositivo
+    if (!dispositivoData.usuario_id || dispositivoData.usuario_id.path !== `usuarios/${req.userId}`) {
+      return res.status(403).json({ message: 'No tienes permiso para generar un código para este dispositivo.' });
+    }
+
+    let codigoInvitado;
+    let codigoUnico = false;
+
+    // Generar y verificar un código único
+    while (!codigoUnico) {
+      codigoInvitado = Math.floor(100000 + Math.random() * 900000).toString(); // Generar un código de 6 dígitos
+
+      // Comprobar si ya existe el código en otro dispositivo
+      const dispositivosSnapshot = await db.collection('dispositivos')
+        .where('codigo_invitado', '==', codigoInvitado)
+        .get();
+
+      if (dispositivosSnapshot.empty) {
+        codigoUnico = true; // El código es único
+      }
+    }
 
     // Actualizar el campo codigo_invitado en el documento del dispositivo
     await dispositivoRef.update({ codigo_invitado: codigoInvitado });
 
-    return res.status(200).json({ message: 'Código de invitado generado exitosamente', codigo_invitado: codigoInvitado });
+    return res.status(200).json({ 
+      message: 'Código de invitado generado exitosamente', 
+      codigo_invitado: codigoInvitado 
+    });
   } catch (error) {
-    return res.status(500).json({ message: 'Error al generar el código de invitado', error: error.message });
+    console.error('Error al generar el código de invitado:', error);
+    return res.status(500).json({ 
+      message: 'Error al generar el código de invitado', 
+      error: error.message 
+    });
   }
 });
+
+
 // Submit código invitado
 router.post("/submitCodigoInvitado", authenticate, async (req, res) => {
   const { codigo_invitado } = req.body; // Obtener el código invitado del cuerpo de la solicitud
@@ -357,6 +392,11 @@ router.post("/submitCodigoInvitado", authenticate, async (req, res) => {
     const dispositivoDoc = dispositivosQuery.docs[0];
     const dispositivoData = dispositivoDoc.data();
 
+    // Validar que el usuario que envía la solicitud no sea el dueño del dispositivo
+    if (dispositivoData.usuario_id && dispositivoData.usuario_id.id === `usuarios/${req.userId}`) {
+      return res.status(400).json({ message: 'El propietario del dispositivo no puede agregarse como invitado.' });
+    }
+
     // Obtener el ID del plan y la cantidad máxima de usuarios invitados
     const planId = dispositivoData.plan_id.id; // Asumiendo que el plan_id es una referencia al documento del plan
     const planDoc = await db.collection('planes').doc(planId).get();
@@ -371,25 +411,27 @@ router.post("/submitCodigoInvitado", authenticate, async (req, res) => {
     // Verificar la cantidad actual de usuarios invitados
     const usuarios_invitados = dispositivoData.usuarios_invitados || [];
     if (usuarios_invitados.length >= maxUsuariosInvitados) {
-      return res.status(403).json({ message: 'El número máximo de usuarios invitados ha sido alcanzado' });
+      return res.status(403).json({ message: 'El número máximo de usuarios invitados ha sido alcanzado.' });
     }
 
     // Verificar si el usuario ya está en la lista de usuarios invitados
     const userId = req.userId; // Obtener el userId del middleware
-    if (usuarios_invitados.includes(userId)) {
-      return res.status(400).json({ message: 'El usuario ya está en la lista de usuarios invitados' });
+    if (usuarios_invitados.some(inv => inv.id === `usuarios/${userId}`)) {
+      return res.status(400).json({ message: 'El usuario ya está en la lista de usuarios invitados.' });
     }
 
     // Agregar el usuario a la lista de usuarios invitados
     await dispositivosRef.doc(dispositivoDoc.id).update({
-      usuarios_invitados: admin.firestore.FieldValue.arrayUnion(userId) // Agregar el userId a la lista
+      usuarios_invitados: admin.firestore.FieldValue.arrayUnion(db.doc(`usuarios/${userId}`)) // Agregar el userId como referencia
     });
 
     return res.status(200).json({ message: 'Usuario agregado a los invitados exitosamente' });
   } catch (error) {
+    console.error('Error al procesar el código invitado:', error);
     return res.status(500).json({ message: 'Error al procesar el código invitado', error: error.message });
   }
 });
+
 
 
 module.exports = router;
