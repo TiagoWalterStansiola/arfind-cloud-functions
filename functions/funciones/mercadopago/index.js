@@ -124,12 +124,13 @@ router.post('/crearOrdenDinamicaWeb', async (req, res) => {
     try {
         const { nombreProducto, descripcionProducto, imagenProducto, cantidad, precio } = req.body;
         const preference = new Preference(client);
+
         const preferenceParams = {
             body: {
                 back_urls: {
-                    success: 'tuapp://airfind-retorno-pago?estado=exitoso',
-                    failure: 'tuapp://airfind-retorno-fallo?estado=fallo',
-                    pending: 'tuapp://airfind-retorno-pendiente?estado=pendiente'
+                    success: 'http://localhost:3001/pago?estado=exitoso',
+                    failure: 'http://localhost:3001/pago?estado=fallo',
+                    pending: 'http://localhost:3001/pago?estado=pendiente'
                 },
                 payment_methods: {
                     excluded_payment_methods: [
@@ -162,12 +163,17 @@ router.post('/crearOrdenDinamicaWeb', async (req, res) => {
                 ]
             }
         };
+
         const preferenceResponse = await preference.create(preferenceParams);
+
         res.status(200).json({ url: preferenceResponse.init_point });
     } catch (error) {
         console.error('Error al crear la orden de Mercado Pago:', error);
         res.status(500).send('Error interno del servidor');
     }
 });
+
+module.exports = router;
+
 
 module.exports = router;
