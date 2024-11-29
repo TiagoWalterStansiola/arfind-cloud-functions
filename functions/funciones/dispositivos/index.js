@@ -28,12 +28,15 @@ router.get("/getDispositivosByUsuario", authenticate, async (req, res) => {
       return res.status(404).send("No se encontraron dispositivos para este usuario.");
     }
 
-    // Obtener los dispositivos y agregar refresco desde el plan
+    // Obtener los dispositivos y agregar refresco y src desde el plan y producto
     const dispositivos = await Promise.all(
-      dispositivoSnapshot.docs.map(async doc => {
+      dispositivoSnapshot.docs.map(async (doc) => {
         const data = doc.data();
-        let refresco = null;
 
+        let refresco = null;
+        let productoImagen = null;
+
+        // Obtener tasa de refresco desde el plan
         if (data.plan_id) {
           const planDoc = await db.collection("planes").doc(data.plan_id).get();
           if (planDoc.exists) {
@@ -41,10 +44,19 @@ router.get("/getDispositivosByUsuario", authenticate, async (req, res) => {
           }
         }
 
+        // Obtener la imagen del producto desde el tipo_producto
+        if (data.tipo_producto) {
+          const productoDoc = await db.collection("productos").doc(data.tipo_producto).get();
+          if (productoDoc.exists) {
+            imagen = productoDoc.data().imagen || null;
+          }
+        }
+
         return {
           id: doc.id,
           ...data,
           refresco, // Agregar refresco
+          imagen, // Agregar imagen del producto
         };
       })
     );
@@ -76,15 +88,20 @@ router.get("/getDispositivosInvitados", authenticate, async (req, res) => {
       .get();
 
     if (dispositivoSnapshot.empty) {
-      return res.status(404).json({ message: "No se encontraron dispositivos en los que este usuario está invitado." });
+      return res.status(404).json({
+        message: "No se encontraron dispositivos en los que este usuario está invitado.",
+      });
     }
 
-    // Obtener los dispositivos y agregar refresco desde el plan
+    // Obtener los dispositivos y agregar refresco e imagen desde las colecciones relacionadas
     const dispositivos = await Promise.all(
-      dispositivoSnapshot.docs.map(async doc => {
+      dispositivoSnapshot.docs.map(async (doc) => {
         const data = doc.data();
-        let refresco = null;
 
+        let refresco = null;
+        let productoImagen = null;
+
+        // Obtener tasa de refresco desde el plan
         if (data.plan_id) {
           const planDoc = await db.collection("planes").doc(data.plan_id).get();
           if (planDoc.exists) {
@@ -92,10 +109,19 @@ router.get("/getDispositivosInvitados", authenticate, async (req, res) => {
           }
         }
 
+        // Obtener la imagen del producto desde el tipo_producto
+        if (data.tipo_producto) {
+          const productoDoc = await db.collection("productos").doc(data.tipo_producto).get();
+          if (productoDoc.exists) {
+            imagen = productoDoc.data().imagen || null;
+          }
+        }
+
         return {
           id: doc.id,
           ...data,
           refresco, // Agregar refresco
+          imagen, // Agregar imagen del producto
         };
       })
     );
@@ -103,9 +129,13 @@ router.get("/getDispositivosInvitados", authenticate, async (req, res) => {
     return res.status(200).json(dispositivos);
   } catch (error) {
     console.error("Error al obtener los dispositivos invitados:", error.message);
-    return res.status(500).json({ message: "Error al obtener los dispositivos invitados.", error: error.message });
+    return res.status(500).json({
+      message: "Error al obtener los dispositivos invitados.",
+      error: error.message,
+    });
   }
 });
+
 
 
 
@@ -246,6 +276,14 @@ router.put("/updateDispositivo", authenticateAdmin, async (req, res) => {
       updatedFields.ubicacion = new admin.firestore.GeoPoint(latitude, longitude);
     }
 
+    // Validar y actualizar numero de telefono
+    if (updatedData.numero_telefonico) {
+      if (typeof updatedData.numero_telefonico !== "string" || !updatedData.numero_telefonico.trim() || isNaN(Number(updatedData.numero_telefonico))) {
+        return res.status(400).json({ message: "El número telefónico debe ser un string numérico no vacío." });
+      }
+      updatedFields.numero_telefonico = updatedData.numero_telefonico.trim();
+    }
+
     // Validar y actualizar apodo
     if (updatedData.apodo) {
       if (typeof updatedData.apodo !== "string" || !updatedData.apodo.trim()) {
@@ -280,10 +318,84 @@ router.put("/updateDispositivo", authenticateAdmin, async (req, res) => {
   }
 });
 
+router.put("/configureDispositivo", authenticate, async (req, res) => {
+  const { deviceId, action, updates } = req.body;
+
+  if (!deviceId || typeof deviceId !== "string") {
+    return res.status(400).json({ message: "Se requiere el ID del dispositivo y debe ser un string." });
+  }
+
+  try {
+    const dispositivoRef = db.collection("dispositivos").doc(deviceId);
+    const dispositivoDoc = await dispositivoRef.get();
+
+    if (!dispositivoDoc.exists) {
+      return res.status(404).json({ message: "Dispositivo no encontrado." });
+    }
+
+    const dispositivoData = dispositivoDoc.data();
+
+    // Validar que el usuario autenticado sea el propietario del dispositivo
+    if (dispositivoData.usuario_id !== req.userId) {
+      return res.status(403).json({ message: "No tienes permiso para configurar este dispositivo." });
+    }
+
+    const updatedFields = {};
+
+    switch (action) {
+      case "darseDeBaja":
+        // Darse de baja: Dejar al usuario sin plan y limpiar los usuarios_invitados
+        updatedFields.plan_id = null;
+        updatedFields.usuarios_invitados = [];
+        break;
+
+      case "eliminarInvitados":
+        // Eliminar invitados: Validar y actualizar la lista
+        if (!updates || !Array.isArray(updates.invitedUsers)) {
+          return res.status(400).json({ message: "Se requiere una lista de usuarios invitados para eliminar." });
+        }
+
+        const invitadosActualizados = dispositivoData.usuarios_invitados.filter(
+          (userId) => !updates.invitedUsers.includes(userId)
+        );
+
+        updatedFields.usuarios_invitados = invitadosActualizados;
+        break;
+
+      case "cambiarPlan":
+        // Cambiar plan: Validar y actualizar el plan asociado
+        if (!updates || !updates.planId) {
+          return res.status(400).json({ message: "Se requiere un nuevo plan ID para cambiar." });
+        }
+
+        const planDoc = await db.collection("planes").doc(updates.planId).get();
+        if (!planDoc.exists) {
+          return res.status(404).json({ message: "El plan proporcionado no existe." });
+        }
+
+        updatedFields.plan_id = updates.planId;
+        break;
+
+      default:
+        return res.status(400).json({ message: "Acción no válida." });
+    }
+
+    // Agregar la marca de última actualización
+    updatedFields.ult_actualizacion = admin.firestore.Timestamp.now();
+
+    // Actualizar el dispositivo en Firestore
+    await dispositivoRef.update(updatedFields);
+
+    return res.status(200).json({ message: "Configuración del dispositivo actualizada exitosamente." });
+  } catch (error) {
+    console.error("Error al configurar el dispositivo:", error.message);
+    return res.status(500).json({ message: "Error al configurar el dispositivo.", error: error.message });
+  }
+});
 
 // Eliminar dispositivo
 router.delete("/deleteDispositivo", authenticateAdmin, async (req, res) => {
-  const { deviceId } = req.params;
+  const { deviceId } = req.body;
 
   try {
     await db.collection('dispositivos').doc(deviceId).delete();
