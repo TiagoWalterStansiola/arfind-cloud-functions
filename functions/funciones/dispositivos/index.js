@@ -34,7 +34,8 @@ router.get("/getDispositivosByUsuario", authenticate, async (req, res) => {
         const data = doc.data();
 
         let refresco = null;
-        let productoImagen = null;
+        let imagen = null;
+        let detallesUsuariosInvitados = [];
 
         // Obtener tasa de refresco desde el plan
         if (data.plan_id) {
@@ -51,12 +52,24 @@ router.get("/getDispositivosByUsuario", authenticate, async (req, res) => {
             imagen = productoDoc.data().imagen || null;
           }
         }
+        // Obtener información de los usuarios invitados
+        if (data.usuarios_invitados && Array.isArray(data.usuarios_invitados)) {
+          const usuariosSnapshot = await db
+            .collection("usuarios")
+            .where(admin.firestore.FieldPath.documentId(), "in", data.usuarios_invitados)
+            .get();
 
+          detallesUsuariosInvitados = usuariosSnapshot.docs.map((userDoc) => ({
+            id: userDoc.id,
+            nombre: userDoc.data().nombre || "Usuario desconocido", // Por si falta el nombre
+          }));
+        }
         return {
           id: doc.id,
           ...data,
           refresco, // Agregar refresco
           imagen, // Agregar imagen del producto
+          detalles_usuarios_invitados: detallesUsuariosInvitados || [], // Lista de usuarios invitados
         };
       })
     );
@@ -99,7 +112,7 @@ router.get("/getDispositivosInvitados", authenticate, async (req, res) => {
         const data = doc.data();
 
         let refresco = null;
-        let productoImagen = null;
+        let imagen = null;
 
         // Obtener tasa de refresco desde el plan
         if (data.plan_id) {
@@ -116,7 +129,7 @@ router.get("/getDispositivosInvitados", authenticate, async (req, res) => {
             imagen = productoDoc.data().imagen || null;
           }
         }
-
+        
         return {
           id: doc.id,
           ...data,
@@ -136,6 +149,41 @@ router.get("/getDispositivosInvitados", authenticate, async (req, res) => {
   }
 });
 
+// Funcion utilizada para listar los nombres de los
+router.post("/getUsuariosByIds", authenticate, async (req, res) => {
+  const { userIds } = req.body;
+
+  // Validar que el array de IDs se haya proporcionado
+  if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
+    return res.status(400).json({ message: "Se requiere una lista de IDs de usuarios." });
+  }
+
+  try {
+    // Consultar los usuarios en Firestore
+    const usuariosSnapshot = await db
+      .collection("usuarios")
+      .where(admin.firestore.FieldPath.documentId(), "in", userIds)
+      .get();
+
+    if (usuariosSnapshot.empty) {
+      return res.status(404).json({ message: "No se encontraron usuarios para los IDs proporcionados." });
+    }
+
+    // Mapear los datos de los usuarios
+    const usuarios = usuariosSnapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+
+    return res.status(200).json(usuarios);
+  } catch (error) {
+    console.error("Error al obtener usuarios:", error.message);
+    return res.status(500).json({
+      message: "Error al obtener los usuarios.",
+      error: error.message,
+    });
+  }
+});
 
 
 
