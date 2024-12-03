@@ -7,39 +7,38 @@ const router = express.Router();
  * Ruta para registrar un tipo de notificación
  */
 router.post('/createTipoNotificacion', authenticateAdmin, async (req, res) => {
-    const { id_tipo_notificacion, tipo, mensaje_plantilla } = req.body;
+    const { tipo, mensaje_plantilla } = req.body; // Solo recibimos estos campos desde el cliente
 
     try {
         // Validar campos obligatorios
-        if (!id_tipo_notificacion || !tipo || !mensaje_plantilla) {
-            return res.status(400).json({ message: 'Faltan campos obligatorios: id_tipo_notificacion, tipo, mensaje_plantilla.' });
+        if (!tipo || !mensaje_plantilla) {
+            return res.status(400).json({ message: 'Faltan campos obligatorios: tipo, mensaje_plantilla.' });
         }
 
-        // Verificar si el tipo de notificación ya existe
-        const tipoNotificacionRef = admin.firestore().collection('tipos_notificaciones').doc(id_tipo_notificacion);
-        const doc = await tipoNotificacionRef.get();
+        const db = admin.firestore();
+        const tiposNotificacionesRef = db.collection('tipos_notificaciones');
 
-        if (doc.exists) {
-            return res.status(400).json({
-                message: 'El id_tipo_notificacion ya existe.',
-            });
-        }
-
-        // Crear el nuevo tipo de notificación
-        const tipoNotificacion = {
-            id_tipo_notificacion,
+        // Crear un nuevo documento en la colección (Firestore genera el ID automáticamente)
+        const newTipoNotificacion = {
             tipo,
             mensaje_plantilla,
         };
 
-        await tipoNotificacionRef.set(tipoNotificacion);
+        const docRef = await tiposNotificacionesRef.add(newTipoNotificacion);
 
-        return res.status(201).json({ message: 'Tipo de notificación registrado con éxito.', tipoNotificacion });
+        // Agregar el ID generado al objeto de respuesta
+        const tipoNotificacionConId = { id_tipo_notificacion: docRef.id, ...newTipoNotificacion };
+
+        return res.status(201).json({
+            message: 'Tipo de notificación registrado con éxito.',
+            tipoNotificacion: tipoNotificacionConId,
+        });
     } catch (error) {
         console.error('Error al registrar el tipo de notificación:', error);
         return res.status(500).json({ message: 'Error al registrar el tipo de notificación', error: error.message });
     }
 });
+
 
 
 /**
