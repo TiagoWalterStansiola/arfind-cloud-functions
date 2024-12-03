@@ -236,7 +236,7 @@ router.post("/createDispositivo", authenticateAdmin, async (req, res) => {
 // Actualizar dispositivo
 router.put("/updateDispositivo", authenticateAdmin, async (req, res) => {
   const { deviceId, updatedData } = req.body;
-
+  
   if (!deviceId || typeof deviceId !== "string") {
     return res.status(400).json({ message: "Se requiere el ID del dispositivo y debe ser un string." });
   }
@@ -279,41 +279,82 @@ router.put("/updateDispositivo", authenticateAdmin, async (req, res) => {
       updatedFields.tipo_producto = updatedData.tipo_producto; // Guardar el ID directamente
     }
 
-    // Validar y actualizar usuarios_invitados
-    if (updatedData.usuarios_invitados) {
+    // Validar y actualizar usuarios_invitados desde IDs o emails
+    if (updatedData.usuarios_invitados || updatedData.emails_invitados) {
       const usuariosValidos = [];
       const usuariosSet = new Set();
 
-      // Validar duplicados y existencia de usuarios
-      for (const uid of updatedData.usuarios_invitados) {
-        if (usuariosSet.has(uid)) {
-          return res.status(400).json({ message: `El usuario invitado con ID ${uid} está duplicado.` });
-        }
-        const usuarioDoc = await db.collection("usuarios").doc(uid).get();
-        if (!usuarioDoc.exists) {
-          return res.status(400).json({ message: `El usuario invitado con ID ${uid} no existe.` });
-        }
-        usuariosValidos.push(uid); // Agregar el ID al array
-        usuariosSet.add(uid);
-      }
+      // Procesar IDs de usuarios directamente si están presentes
+      if (updatedData.usuarios_invitados) {
+          if (!Array.isArray(updatedData.usuarios_invitados) || updatedData.usuarios_invitados.length === 0) {
+              return res.status(400).json({ message: "El campo usuarios_invitados debe ser un arreglo no vacío." });
+          }
 
+          for (const userId of updatedData.usuarios_invitados) {
+              if (usuariosSet.has(userId)) {
+                  return res.status(400).json({ message: `El ID invitado ${userId} está duplicado.` });
+              }
+
+              const usuarioDoc = await db.collection("usuarios").doc(userId).get();
+              if (!usuarioDoc.exists) {
+                  return res.status(400).json({ message: `El usuario invitado con ID ${userId} no existe.` });
+              }
+
+              usuariosValidos.push(userId);
+              usuariosSet.add(userId);
+          }
+      }
+      // Procesar emails de usuarios si están presentes
+      if (updatedData.emails_invitados) {
+        if (typeof updatedData.emails_invitados !== "string" || !updatedData.emails_invitados.trim()) {
+            return res.status(400).json({ message: "El campo emails_invitados debe ser un string no vacío separado por ';'." });
+        }
+
+        const emailList = updatedData.emails_invitados.split(";").map(email => email.trim());
+        const emailPromises = [];
+
+        for (const email of emailList) {
+            if (usuariosSet.has(email)) {
+                return res.status(400).json({ message: `El email invitado ${email} está duplicado.` });
+            }
+
+            emailPromises.push(
+                db.collection("usuarios").where("correo", "==", email).limit(1).get()
+            );
+            usuariosSet.add(email);
+        }
+
+        const emailSnapshots = await Promise.all(emailPromises);
+
+        for (const snapshot of emailSnapshots) {
+            if (!snapshot.empty) {
+                const usuarioDoc = snapshot.docs[0];
+                usuariosValidos.push(usuarioDoc.id); // Agregar el ID del usuario
+            } else {
+                return res.status(400).json({
+                    message: "Uno o más correos no corresponden a usuarios registrados.",
+                });
+            }
+        }
+      }
       // Validar el número máximo de invitados permitido por el plan
       const planId = updatedData.plan_id || dispositivoData.plan_id;
       if (planId) {
-        const planDoc = await db.collection("planes").doc(planId).get();
-        if (!planDoc.exists) {
-          return res.status(400).json({ message: "El plan asociado no existe." });
-        }
-        const cantidadMaxInvitados = planDoc.data().cantidad_compartidos || 0;
-        if (usuariosValidos.length > cantidadMaxInvitados) {
-          return res.status(400).json({
-            message: `El número máximo de usuarios invitados permitidos para este plan es ${cantidadMaxInvitados}.`,
-          });
-        }
+          const planDoc = await db.collection("planes").doc(planId).get();
+          if (!planDoc.exists) {
+              return res.status(400).json({ message: "El plan asociado no existe." });
+          }
+          const cantidadMaxInvitados = planDoc.data().cantidad_compartidos || 0;
+          if (usuariosValidos.length > cantidadMaxInvitados) {
+              return res.status(400).json({
+                  message: `El número máximo de usuarios invitados permitidos para este plan es ${cantidadMaxInvitados}.`,
+              });
+          }
       }
 
       updatedFields.usuarios_invitados = usuariosValidos;
     }
+
 
     // Validar y actualizar ubicación
     if (updatedData.ubicacion) {
@@ -456,13 +497,43 @@ router.delete("/deleteDispositivo", authenticateAdmin, async (req, res) => {
 // Listar dispositivos
 router.get("/getAllDispositivos", authenticateAdmin, async (req, res) => {
   try {
-    const devicesSnapshot = await db.collection('dispositivos').get();
-    const devices = devicesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const devicesSnapshot = await db.collection("dispositivos").get();
+    const devices = [];
+
+    for (const doc of devicesSnapshot.docs) {
+      const deviceData = doc.data();
+      const { usuarios_invitados } = deviceData;
+
+      let emails_invitados = "";
+
+      // Si hay usuarios invitados, obtener sus correos electrónicos
+      if (usuarios_invitados && Array.isArray(usuarios_invitados) && usuarios_invitados.length > 0) {
+        const emailPromises = usuarios_invitados.map(async (userId) => {
+          const userDoc = await db.collection("usuarios").doc(userId).get();
+          if (userDoc.exists) {
+            return userDoc.data().correo; // Extraer el correo electrónico
+          }
+          return null; // Manejar usuarios inexistentes
+        });
+
+        // Esperar a que se resuelvan todas las promesas
+        const emailList = (await Promise.all(emailPromises)).filter((email) => email !== null);
+
+        // Convertir la lista de emails a un string separado por ";"
+        emails_invitados = emailList.join(";");
+      }
+
+      devices.push({ id: doc.id, ...deviceData, emails_invitados });
+    }
+
     return res.status(200).send(devices);
   } catch (error) {
+    console.error("Error al obtener dispositivos:", error.message);
     return res.status(500).send(`Error al obtener dispositivos: ${error.message}`);
   }
 });
+
+
 
 /* Funciones para el cliente */
 // Modificar apodo del dispositivo
