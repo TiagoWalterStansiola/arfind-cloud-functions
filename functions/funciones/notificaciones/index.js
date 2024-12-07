@@ -94,19 +94,47 @@ router.get('/misNotificaciones', authenticate, async (req, res) => {
     const userId = req.userId;
 
     try {
+        // Obtener todas las notificaciones del usuario
         const snapshot = await admin.firestore().collection('notificaciones').where('id_usuario', '==', userId).get();
 
         if (snapshot.empty) {
             return res.status(404).json({ message: 'No se encontraron notificaciones para este usuario.' });
         }
 
-        const notificaciones = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const notificaciones = [];
+        const tipoNotificacionesCache = {}; // Cache para evitar múltiples consultas para el mismo tipo
+
+        for (const doc of snapshot.docs) {
+            const notificacion = { id: doc.id, ...doc.data() };
+
+            // Verificar si el tipo ya está en caché
+            if (!tipoNotificacionesCache[notificacion.tipo_notificacion_id]) {
+                const tipoSnapshot = await admin
+                    .firestore()
+                    .collection('tipos_notificaciones')
+                    .doc(notificacion.tipo_notificacion_id)
+                    .get();
+
+                if (tipoSnapshot.exists) {
+                    tipoNotificacionesCache[notificacion.tipo_notificacion_id] = tipoSnapshot.data().tipo;
+                } else {
+                    tipoNotificacionesCache[notificacion.tipo_notificacion_id] = null; // Tipo no encontrado
+                }
+            }
+
+            // Agregar solo el nombre del tipo al resultado
+            notificacion.tipo = tipoNotificacionesCache[notificacion.tipo_notificacion_id];
+
+            notificaciones.push(notificacion);
+        }
+
         return res.status(200).json(notificaciones);
     } catch (error) {
         console.error('Error al obtener las notificaciones:', error);
         return res.status(500).json({ message: 'Error al obtener las notificaciones', error: error.message });
     }
 });
+
 
 /**
  * Ruta para obtener todos los tipos de notificaciones

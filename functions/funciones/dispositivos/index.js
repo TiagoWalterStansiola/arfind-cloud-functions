@@ -53,7 +53,7 @@ router.get("/getDispositivosByUsuario", authenticate, async (req, res) => {
           }
         }
         // Obtener información de los usuarios invitados
-        if (data.usuarios_invitados && Array.isArray(data.usuarios_invitados)) {
+        if (data.usuarios_invitados && Array.isArray(data.usuarios_invitados) && data.usuarios_invitados.length > 0) {
           const usuariosSnapshot = await db
             .collection("usuarios")
             .where(admin.firestore.FieldPath.documentId(), "in", data.usuarios_invitados)

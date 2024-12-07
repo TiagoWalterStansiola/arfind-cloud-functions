@@ -3,9 +3,11 @@ const functions = require('firebase-functions');
 const { MercadoPagoConfig, Preference } = require('mercadopago');
 const admin = require('firebase-admin');
 const express = require('express');
+const authenticate = require('../../funciones/clientes/middleware/authMiddleware');
 
 // Configuración de las credenciales de acceso a Mercado Pago
 const client = new MercadoPagoConfig({ accessToken: 'APP_USR-7557743885047413-110316-06069ee599fb83bfed6452ad09a1e0a5-2076128946' });
+const preference = new Preference(client);
 
 // Inicializa el enrutador de Express
 const router = express.Router();
@@ -120,10 +122,18 @@ router.post('/crearOrdenDinamica', async (req, res) => {
         res.status(500).send('Error interno del servidor');
     }
 });
-router.post('/crearOrdenDinamicaWeb', async (req, res) => {
+router.post('/crearOrdenDinamicaWeb', authenticate, async (req, res) => {
     try {
-        const { nombreProducto, descripcionProducto, imagenProducto, cantidad, precio } = req.body;
-        const preference = new Preference(client);
+        const { nombreProducto, descripcionProducto, imagenProducto, cantidad, precio, pedidoId, idProducto } = req.body;
+        const userId = req.userId; // Obtenemos el userId autenticado del middleware
+
+        if (!userId) {
+            return res.status(400).json({ message: 'Usuario no autenticado.' });
+        }
+
+        if (!nombreProducto || !descripcionProducto || !imagenProducto || !cantidad || !precio || !idProducto) {
+            return res.status(400).json({ message: 'Datos incompletos para crear la orden.' });
+        }
 
         const preferenceParams = {
             body: {
@@ -132,25 +142,8 @@ router.post('/crearOrdenDinamicaWeb', async (req, res) => {
                     failure: 'http://localhost:3001/pago?estado=fallo',
                     pending: 'http://localhost:3001/pago?estado=pendiente'
                 },
-                payment_methods: {
-                    excluded_payment_methods: [
-                        { id: "amex" },
-                        { id: "argencard" },
-                        { id: "cabal" },
-                        { id: "cmr" },
-                        { id: "cencosud" },
-                        { id: "cordobesa" },
-                        { id: "diners" },
-                        { id: "naranja" },
-                        { id: "tarshop" },
-                        { id: "debcabal" },
-                        { id: "maestro" }
-                    ],
-                    excluded_payment_types: [
-                        { id: "ticket" }
-                    ],
-                    installments: 1
-                },
+                notification_url: 'https://arfindfranco-t22ijacwda-uc.a.run.app/webhook/generarPedido',
+                external_reference: JSON.stringify({ pedidoId, idProducto, userId }), // Incluye userId
                 items: [
                     {
                         title: nombreProducto,
@@ -165,7 +158,6 @@ router.post('/crearOrdenDinamicaWeb', async (req, res) => {
         };
 
         const preferenceResponse = await preference.create(preferenceParams);
-
         res.status(200).json({ url: preferenceResponse.init_point });
     } catch (error) {
         console.error('Error al crear la orden de Mercado Pago:', error);
@@ -173,7 +165,8 @@ router.post('/crearOrdenDinamicaWeb', async (req, res) => {
     }
 });
 
-module.exports = router;
+
+
 
 
 module.exports = router;

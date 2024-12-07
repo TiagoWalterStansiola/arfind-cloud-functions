@@ -3,11 +3,27 @@ const admin = require('firebase-admin');
 const authenticate = require('../../funciones/clientes/middleware/authMiddleware');
 const authenticateEmpleado = require('../../funciones/clientes/middleware/authMiddlewareEmpleado');
 const router = express.Router();
+const { WEBHOOK_SECRET  } = require('../../config');
 
-// Ruta para crear un nuevo pedido
-router.post('/createPedido', authenticate, async (req, res) => {
-    const { items, direccion } = req.body; // Obtiene los items y la dirección de la solicitud
-    const usuario_id = req.userId; // Obtiene el usuario_id desde el middleware
+// Middleware para autenticar el Webhook
+const authenticateWebhook = (req, res, next) => {
+    const webhookKey = req.headers['x-webhook-key'];
+    if (webhookKey !== WEBHOOK_SECRET) {
+        console.error('Clave del webhook no coincide.');
+        return res.status(403).json({ message: 'Acceso denegado' });
+    }
+    next();
+};
+
+
+// Ruta para crear un nuevo pedido (desde el Webhook)
+// Ruta para crear un nuevo pedido (desde el Webhook)
+router.post('/createPedido', authenticateWebhook, async (req, res) => {
+    const { items, direccion, userId } = req.body;
+
+    if (!userId) {
+        return res.status(400).json({ message: 'Usuario no identificado' });
+    }
 
     try {
         const db = admin.firestore();
@@ -16,9 +32,8 @@ router.post('/createPedido', authenticate, async (req, res) => {
         for (const item of items) {
             const { id_producto, plan_id } = item;
 
-            // Buscar un dispositivo disponible para el producto
             const dispositivoSnapshot = await db.collection('dispositivos')
-                .where('producto_id', '==', id_producto)
+                .where('tipo_producto', '==', id_producto)
                 .where('usuario_id', '==', null)
                 .limit(1)
                 .get();
@@ -30,32 +45,41 @@ router.post('/createPedido', authenticate, async (req, res) => {
             const dispositivoDoc = dispositivoSnapshot.docs[0];
             const dispositivoId = dispositivoDoc.id;
 
-            // Asignar el dispositivo al usuario
-            await dispositivoDoc.ref.update({ usuario_id, plan_id });
+            await dispositivoDoc.ref.update({
+                usuario_id: userId,
+                plan_id,
+                ult_actualizacion: admin.firestore.FieldValue.serverTimestamp()
+            });
 
-            // Crear el pedido
+            const fechaEntrega = admin.firestore.Timestamp.fromDate(
+                new Date(Date.now() + 5 * 24 * 60 * 60 * 1000)
+            );
+
             const newPedido = {
-                usuario_id,
+                usuario_id: userId,
                 producto_id: id_producto,
                 is_entregado: false,
-                id_pedido: dispositivoId, // Usar el ID del dispositivo como ID único del pedido
+                id_dispositivo: dispositivoId,
                 fecha_solicitud: admin.firestore.FieldValue.serverTimestamp(),
-                direccion,
-                fecha_entrega: null
+                direccion: direccion || 'Corrientes 2037',
+                fecha_entrega: fechaEntrega
             };
 
-            // Guardar el pedido
             const pedidoRef = await db.collection('pedidos').add(newPedido);
             pedidos.push({ id: pedidoRef.id, ...newPedido });
         }
 
         return res.status(201).json({ message: 'Pedidos creados con éxito', pedidos });
-
     } catch (error) {
         console.error('Error al crear el pedido:', error);
         return res.status(500).json({ message: 'Error al crear el pedido', error: error.message });
     }
 });
+
+
+
+
+
 
 // Obtener todos los pedidos del usuario autenticado
 router.get('/getPedidosByUsuario', authenticate, async (req, res) => {
