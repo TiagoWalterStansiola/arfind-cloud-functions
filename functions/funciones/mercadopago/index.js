@@ -124,17 +124,46 @@ router.post('/crearOrdenDinamica', async (req, res) => {
 });
 router.post('/crearOrdenDinamicaWeb', authenticate, async (req, res) => {
     try {
-        const { nombreProducto, descripcionProducto, imagenProducto, cantidad, precio, pedidoId, idProducto } = req.body;
-        const userId = req.userId; // Obtenemos el userId autenticado del middleware
+        const { idProducto, idPlan } = req.body;
+        const userId = req.userId;
 
         if (!userId) {
             return res.status(400).json({ message: 'Usuario no autenticado.' });
         }
 
-        if (!nombreProducto || !descripcionProducto || !imagenProducto || !cantidad || !precio || !idProducto) {
-            return res.status(400).json({ message: 'Datos incompletos para crear la orden.' });
+        if (!idProducto || !idPlan) {
+            return res.status(400).json({ message: 'Datos incompletos: se requiere idProducto e idPlan.' });
         }
 
+        // Consultar Firestore para obtener los detalles del producto y el plan
+        const db = admin.firestore();
+
+        const productoDoc = await db.collection('productos').doc(idProducto).get();
+        const planDoc = await db.collection('planes').doc(idPlan).get();
+
+        if (!productoDoc.exists) {
+            return res.status(404).json({ message: `Producto con id ${idProducto} no encontrado.` });
+        }
+
+        if (!planDoc.exists) {
+            return res.status(404).json({ message: `Plan con id ${idPlan} no encontrado.` });
+        }
+
+        // Extraer los datos del producto y el plan
+        const producto = productoDoc.data();
+        const plan = planDoc.data();
+
+        const precioProducto = producto.precio || 0; // Precio del producto
+        const precioPlan = plan.precio || 0; // Precio del plan
+        const precioTotal = precioProducto + precioPlan; // Precio total
+
+        // Combinar el nombre del producto y del plan
+        const titulo = `Dispositivo ${producto.titulo || 'Producto desconocido'} + ${plan.nombre || 'Plan desconocido'}`;
+
+        // URL de la imagen del producto
+        const imagenProducto = producto.imagen || 'https://via.placeholder.com/150';
+
+        // Crear los parámetros de la preferencia de Mercado Pago
         const preferenceParams = {
             body: {
                 back_urls: {
@@ -143,27 +172,30 @@ router.post('/crearOrdenDinamicaWeb', authenticate, async (req, res) => {
                     pending: 'http://localhost:3001/pago?estado=pendiente'
                 },
                 notification_url: 'https://arfindfranco-t22ijacwda-uc.a.run.app/webhook/generarPedido',
-                external_reference: JSON.stringify({ pedidoId, idProducto, userId }), // Incluye userId
+                external_reference: JSON.stringify({ idProducto, idPlan, userId }),
                 items: [
                     {
-                        title: nombreProducto,
-                        description: descripcionProducto,
-                        picture_url: imagenProducto,
-                        quantity: cantidad,
+                        title: titulo, // Título combinado
+                        description: `Plan: ${plan.nombre || 'Desconocido'}`,
+                        picture_url: imagenProducto, // Imagen del producto
+                        quantity: 1,
                         currency_id: 'ARS',
-                        unit_price: precio
+                        unit_price: precioTotal
                     }
                 ]
             }
         };
 
         const preferenceResponse = await preference.create(preferenceParams);
-        res.status(200).json({ url: preferenceResponse.init_point });
+
+        res.status(200).json({ url: preferenceResponse.init_point, precioTotal });
     } catch (error) {
         console.error('Error al crear la orden de Mercado Pago:', error);
-        res.status(500).send('Error interno del servidor');
+        res.status(500).json({ message: 'Error interno del servidor', error: error.message });
     }
 });
+
+
 
 
 

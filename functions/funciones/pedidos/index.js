@@ -32,6 +32,10 @@ router.post('/createPedido', authenticateWebhook, async (req, res) => {
         for (const item of items) {
             const { id_producto, plan_id } = item;
 
+            if (!id_producto || !plan_id) {
+                return res.status(400).json({ message: 'Datos incompletos para crear el pedido.' });
+            }
+
             const dispositivoSnapshot = await db.collection('dispositivos')
                 .where('tipo_producto', '==', id_producto)
                 .where('usuario_id', '==', null)
@@ -47,7 +51,7 @@ router.post('/createPedido', authenticateWebhook, async (req, res) => {
 
             await dispositivoDoc.ref.update({
                 usuario_id: userId,
-                plan_id,
+                plan_id, // Asigna el plan al dispositivo
                 ult_actualizacion: admin.firestore.FieldValue.serverTimestamp()
             });
 
@@ -62,7 +66,8 @@ router.post('/createPedido', authenticateWebhook, async (req, res) => {
                 id_dispositivo: dispositivoId,
                 fecha_solicitud: admin.firestore.FieldValue.serverTimestamp(),
                 direccion: direccion || 'Corrientes 2037',
-                fecha_entrega: fechaEntrega
+                fecha_entrega: fechaEntrega,
+                plan_id // Asigna el plan al pedido
             };
 
             const pedidoRef = await db.collection('pedidos').add(newPedido);
@@ -75,6 +80,7 @@ router.post('/createPedido', authenticateWebhook, async (req, res) => {
         return res.status(500).json({ message: 'Error al crear el pedido', error: error.message });
     }
 });
+
 
 
 
