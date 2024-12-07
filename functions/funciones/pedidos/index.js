@@ -4,6 +4,7 @@ const authenticate = require('../../funciones/clientes/middleware/authMiddleware
 const authenticateEmpleado = require('../../funciones/clientes/middleware/authMiddlewareEmpleado');
 const router = express.Router();
 const { WEBHOOK_SECRET  } = require('../../config');
+const eventEmitter = require('../notificaciones/eventEmmiter'); // Importa el EventEmitter
 
 // Middleware para autenticar el Webhook
 const authenticateWebhook = (req, res, next) => {
@@ -16,7 +17,6 @@ const authenticateWebhook = (req, res, next) => {
 };
 
 
-// Ruta para crear un nuevo pedido (desde el Webhook)
 // Ruta para crear un nuevo pedido (desde el Webhook)
 router.post('/createPedido', authenticateWebhook, async (req, res) => {
     const { items, direccion, userId } = req.body;
@@ -36,6 +36,21 @@ router.post('/createPedido', authenticateWebhook, async (req, res) => {
                 return res.status(400).json({ message: 'Datos incompletos para crear el pedido.' });
             }
 
+            // Buscar el nombre del producto
+            const productoDoc = await db.collection('productos').doc(id_producto).get();
+            if (!productoDoc.exists) {
+                return res.status(404).json({ message: `Producto con id ${id_producto} no encontrado.` });
+            }
+            const producto = productoDoc.data();
+
+            // Buscar el nombre del plan
+            const planDoc = await db.collection('planes').doc(plan_id).get();
+            if (!planDoc.exists) {
+                return res.status(404).json({ message: `Plan con id ${plan_id} no encontrado.` });
+            }
+            const plan = planDoc.data();
+
+            // Buscar dispositivo disponible
             const dispositivoSnapshot = await db.collection('dispositivos')
                 .where('tipo_producto', '==', id_producto)
                 .where('usuario_id', '==', null)
@@ -72,6 +87,19 @@ router.post('/createPedido', authenticateWebhook, async (req, res) => {
 
             const pedidoRef = await db.collection('pedidos').add(newPedido);
             pedidos.push({ id: pedidoRef.id, ...newPedido });
+
+            // Emitir el evento "pedidoCreado" después de crear el pedido
+            eventEmitter.emit('pedidoCreado', {
+                id_usuario: userId,
+                id_dispositivo: dispositivoId,
+                tipo: 'Pedido Confirmado',
+                parametros: {
+                    producto: producto.titulo || 'Producto desconocido', // Usamos el nombre del producto
+                    plan: plan.nombre || 'Plan desconocido', // Usamos el nombre del plan
+                    fecha: fechaEntrega.toDate().toLocaleDateString('es-AR'), // Formatear la fecha
+                    direccion: direccion || 'Corrientes 2037'
+                }
+            });
         }
 
         return res.status(201).json({ message: 'Pedidos creados con éxito', pedidos });
@@ -80,6 +108,7 @@ router.post('/createPedido', authenticateWebhook, async (req, res) => {
         return res.status(500).json({ message: 'Error al crear el pedido', error: error.message });
     }
 });
+
 
 
 

@@ -45,22 +45,28 @@ router.post('/createTipoNotificacion', authenticateAdmin, async (req, res) => {
  * Ruta para crear una notificación
  */
 router.post('/createNotificacion', authenticateAdmin, async (req, res) => {
-    const { id_usuario, id_dispositivo, tipo_notificacion_id, parametros } = req.body;
+    const { id_usuario, id_dispositivo, tipo, parametros } = req.body;
 
     try {
         // Validar campos obligatorios
-        if (!id_usuario || !id_dispositivo || !tipo_notificacion_id) {
-            return res.status(400).json({ message: 'Faltan campos obligatorios: id_usuario, id_dispositivo, tipo_notificacion_id.' });
+        if (!id_usuario || !id_dispositivo || !tipo) {
+            return res.status(400).json({ message: 'Faltan campos obligatorios: id_usuario, id_dispositivo, tipo.' });
         }
 
-        // Obtener el tipo de notificación
-        const tipoNotificacionSnapshot = await admin.firestore().collection('tipos_notificaciones').doc(tipo_notificacion_id).get();
-        if (!tipoNotificacionSnapshot.exists) {
-            return res.status(404).json({ message: 'Tipo de notificación no encontrado.' });
-        }
-        const tipoNotificacion = tipoNotificacionSnapshot.data();
+        // Buscar el tipo de notificación por su campo "tipo"
+        const tipoNotificacionSnapshot = await admin.firestore()
+            .collection('tipos_notificaciones')
+            .where('tipo', '==', tipo)
+            .limit(1)
+            .get();
 
-        // Personalizar el mensaje
+        if (tipoNotificacionSnapshot.empty) {
+            return res.status(404).json({ message: `Tipo de notificación "${tipo}" no encontrado.` });
+        }
+
+        const tipoNotificacion = tipoNotificacionSnapshot.docs[0].data();
+
+        // Personalizar el mensaje con los parámetros
         let mensaje = tipoNotificacion.mensaje_plantilla;
         if (parametros) {
             Object.keys(parametros).forEach((key) => {
@@ -68,12 +74,12 @@ router.post('/createNotificacion', authenticateAdmin, async (req, res) => {
             });
         }
 
-        // Crear la notificación
+        // Crear la notificación en Firestore
         const nuevaNotificacion = {
             mensaje,
             id_usuario,
             id_dispositivo,
-            tipo_notificacion_id,
+            tipo,
             fecha_envio: admin.firestore.FieldValue.serverTimestamp(),
         };
 
