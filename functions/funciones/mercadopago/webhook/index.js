@@ -1,5 +1,6 @@
 const express = require('express');
 const axios = require('axios');
+const admin = require('firebase-admin');
 const { WEBHOOK_SECRET, MERCADO_PAGO_ACCESS_TOKEN } = require('../../../config');
 const router = express.Router();
 
@@ -12,10 +13,21 @@ router.post('/generarPedido', async (req, res) => {
             return res.status(400).json({ message: 'ID de pago no proporcionado en el webhook.' });
         }
 
+        const db = admin.firestore();
+
+        // Verificar si el paymentId ya fue procesado
+        const transaccionRef = db.collection('transacciones_procesadas').doc(paymentId);
+        const transaccionSnapshot = await transaccionRef.get();
+
+        if (transaccionSnapshot.exists) {
+            console.log(`El pago con ID ${paymentId} ya fue procesado.`);
+            return res.status(200).send('OK'); // Responder éxito para evitar reintentos
+        }
+
         const response = await axios.get(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
             headers: {
-                Authorization: `Bearer ${MERCADO_PAGO_ACCESS_TOKEN}`
-            }
+                Authorization: `Bearer ${MERCADO_PAGO_ACCESS_TOKEN}`,
+            },
         });
 
         const payment = response.data;
@@ -33,7 +45,7 @@ router.post('/generarPedido', async (req, res) => {
             console.log('Enviando datos al endpoint de pedidos:', {
                 items: [{ id_producto: idProducto, plan_id: idPlan }],
                 direccion: 'Corrientes 2037',
-                userId
+                userId,
             });
 
             const pedidoResponse = await axios.post(
@@ -41,16 +53,19 @@ router.post('/generarPedido', async (req, res) => {
                 {
                     items: [{ id_producto: idProducto, plan_id: idPlan }],
                     direccion: 'Corrientes 2037',
-                    userId
+                    userId,
                 },
                 {
                     headers: {
-                        'x-webhook-key': WEBHOOK_SECRET
-                    }
+                        'x-webhook-key': WEBHOOK_SECRET,
+                    },
                 }
             );
 
             console.log('Pedido creado exitosamente:', pedidoResponse.data);
+
+            // Almacenar el paymentId como procesado
+            await transaccionRef.set({ procesado: true, fecha: admin.firestore.FieldValue.serverTimestamp() });
         } else {
             console.log('Estado del pago no aprobado:', payment.status);
         }
@@ -61,6 +76,8 @@ router.post('/generarPedido', async (req, res) => {
         res.status(500).json({ message: 'Error al procesar el webhook', error: error.message });
     }
 });
+
+
 
 
 
