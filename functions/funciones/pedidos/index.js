@@ -28,6 +28,7 @@ router.post('/createPedido', authenticateWebhook, async (req, res) => {
     try {
         const db = admin.firestore();
         const pedidos = [];
+        const batch = db.batch();
 
         for (const item of items) {
             const { id_producto, plan_id } = item;
@@ -36,21 +37,22 @@ router.post('/createPedido', authenticateWebhook, async (req, res) => {
                 return res.status(400).json({ message: 'Datos incompletos para crear el pedido.' });
             }
 
-            // Buscar el nombre del producto
+            // Buscar el producto y el plan
             const productoDoc = await db.collection('productos').doc(id_producto).get();
+            const planDoc = await db.collection('planes').doc(plan_id).get();
+
             if (!productoDoc.exists) {
                 return res.status(404).json({ message: `Producto con id ${id_producto} no encontrado.` });
             }
-            const producto = productoDoc.data();
 
-            // Buscar el nombre del plan
-            const planDoc = await db.collection('planes').doc(plan_id).get();
             if (!planDoc.exists) {
                 return res.status(404).json({ message: `Plan con id ${plan_id} no encontrado.` });
             }
+
+            const producto = productoDoc.data();
             const plan = planDoc.data();
 
-            // Buscar dispositivo disponible
+            // Buscar un dispositivo disponible
             const dispositivoSnapshot = await db.collection('dispositivos')
                 .where('tipo_producto', '==', id_producto)
                 .where('usuario_id', '==', null)
@@ -64,9 +66,10 @@ router.post('/createPedido', authenticateWebhook, async (req, res) => {
             const dispositivoDoc = dispositivoSnapshot.docs[0];
             const dispositivoId = dispositivoDoc.id;
 
-            await dispositivoDoc.ref.update({
+            // Actualizar el dispositivo para asociarlo al usuario y plan
+            batch.update(dispositivoDoc.ref, {
                 usuario_id: userId,
-                plan_id, // Asigna el plan al dispositivo
+                plan_id,
                 ult_actualizacion: admin.firestore.FieldValue.serverTimestamp()
             });
 
@@ -82,25 +85,30 @@ router.post('/createPedido', authenticateWebhook, async (req, res) => {
                 fecha_solicitud: admin.firestore.FieldValue.serverTimestamp(),
                 direccion: direccion || 'Corrientes 2037',
                 fecha_entrega: fechaEntrega,
-                plan_id // Asigna el plan al pedido
+                plan_id
             };
 
-            const pedidoRef = await db.collection('pedidos').add(newPedido);
+            const pedidoRef = db.collection('pedidos').doc();
+            batch.set(pedidoRef, newPedido);
+
             pedidos.push({ id: pedidoRef.id, ...newPedido });
 
-            // Emitir el evento "pedidoCreado" después de crear el pedido
+            // Emitir evento "pedidoCreado"
             eventEmitter.emit('pedidoCreado', {
                 id_usuario: userId,
                 id_dispositivo: dispositivoId,
                 tipo: 'Pedido Confirmado',
                 parametros: {
-                    producto: producto.titulo || 'Producto desconocido', // Usamos el nombre del producto
-                    plan: plan.nombre || 'Plan desconocido', // Usamos el nombre del plan
-                    fecha: fechaEntrega.toDate().toLocaleDateString('es-AR'), // Formatear la fecha
+                    producto: producto.titulo || 'Producto desconocido',
+                    plan: plan.nombre || 'Plan desconocido',
+                    fecha: fechaEntrega.toDate().toLocaleDateString('es-AR'),
                     direccion: direccion || 'Corrientes 2037'
                 }
             });
         }
+
+        // Aplicar los cambios en un solo batch
+        await batch.commit();
 
         return res.status(201).json({ message: 'Pedidos creados con éxito', pedidos });
     } catch (error) {

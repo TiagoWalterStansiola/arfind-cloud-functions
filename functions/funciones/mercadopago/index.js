@@ -135,9 +135,7 @@ router.post('/crearOrdenDinamicaWeb', authenticate, async (req, res) => {
             return res.status(400).json({ message: 'Datos incompletos: se requiere idProducto e idPlan.' });
         }
 
-        // Consultar Firestore para obtener los detalles del producto y el plan
         const db = admin.firestore();
-
         const productoDoc = await db.collection('productos').doc(idProducto).get();
         const planDoc = await db.collection('planes').doc(idPlan).get();
 
@@ -149,21 +147,10 @@ router.post('/crearOrdenDinamicaWeb', authenticate, async (req, res) => {
             return res.status(404).json({ message: `Plan con id ${idPlan} no encontrado.` });
         }
 
-        // Extraer los datos del producto y el plan
         const producto = productoDoc.data();
         const plan = planDoc.data();
+        const precioTotal = (producto.precio || 0) + (plan.precio || 0);
 
-        const precioProducto = producto.precio || 0; // Precio del producto
-        const precioPlan = plan.precio || 0; // Precio del plan
-        const precioTotal = precioProducto + precioPlan; // Precio total
-
-        // Combinar el nombre del producto y del plan
-        const titulo = `Dispositivo ${producto.titulo || 'Producto desconocido'} + ${plan.nombre || 'Plan desconocido'}`;
-
-        // URL de la imagen del producto
-        const imagenProducto = producto.imagen || 'https://via.placeholder.com/150';
-
-        // Crear los parámetros de la preferencia de Mercado Pago
         const preferenceParams = {
             body: {
                 back_urls: {
@@ -175,19 +162,25 @@ router.post('/crearOrdenDinamicaWeb', authenticate, async (req, res) => {
                 external_reference: JSON.stringify({ idProducto, idPlan, userId }),
                 items: [
                     {
-                        title: titulo, // Título combinado
+                        title: `Dispositivo ${producto.titulo || 'Desconocido'} + ${plan.nombre || 'Desconocido'}`,
                         description: `Plan: ${plan.nombre || 'Desconocido'}`,
-                        picture_url: imagenProducto, // Imagen del producto
+                        picture_url: producto.imagen || 'https://via.placeholder.com/150',
                         quantity: 1,
                         currency_id: 'ARS',
                         unit_price: precioTotal
                     }
-                ]
+                ],
+                payment_methods: {
+                    excluded_payment_methods: [
+                        { id: "amex" }, { id: "diners" }, { id: "naranja" }
+                    ],
+                    excluded_payment_types: [{ id: "ticket" }],
+                    installments: 1
+                },
             }
         };
 
         const preferenceResponse = await preference.create(preferenceParams);
-
         res.status(200).json({ url: preferenceResponse.init_point, precioTotal });
     } catch (error) {
         console.error('Error al crear la orden de Mercado Pago:', error);
