@@ -154,9 +154,9 @@ router.post('/crearOrdenDinamicaWeb', authenticate, async (req, res) => {
         const preferenceParams = {
             body: {
                 back_urls: {
-                    success: 'http://localhost:3001/pago?estado=exitoso',
-                    failure: 'http://localhost:3001/pago?estado=fallo',
-                    pending: 'http://localhost:3001/pago?estado=pendiente'
+                    success: 'http://arfind.web.app/pago?estado=exitoso',
+                    failure: 'http://arfind.web.app/pago?estado=fallo',
+                    pending: 'http://arfind.web.app/pago?estado=pendiente'
                 },
                 notification_url: 'https://arfindfranco-t22ijacwda-uc.a.run.app/webhook/generarPedido',
                 external_reference: JSON.stringify({ idProducto, idPlan, userId }),

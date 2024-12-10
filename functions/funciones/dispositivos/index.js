@@ -435,6 +435,7 @@ router.put("/configureDispositivo", authenticate, async (req, res) => {
       case "darseDeBaja":
         // Darse de baja: Dejar al usuario sin plan y limpiar los usuarios_invitados
         updatedFields.plan_id = null;
+        updatedFields.ubicacion = null;
         updatedFields.usuarios_invitados = [];
         break;
 
@@ -689,6 +690,50 @@ router.post("/submitCodigoInvitado", authenticate, async (req, res) => {
 });
 
 
+// Obtener dispositivos propios e invitados con solo apodo, localización y tipo de producto
+router.get("/getDispositivosMapa", authenticate, async (req, res) => {
+  if (!req.userId) {
+    return res.status(401).send("Usuario no autenticado o token inválido.");
+  }
+
+  const usuarioId = req.userId;
+
+  try {
+    // Obtener dispositivos propios
+    const propiosSnapshot = await db
+      .collection("dispositivos")
+      .where("usuario_id", "==", usuarioId)
+      .get();
+
+    const propios = propiosSnapshot.docs.map((doc) => ({
+      id: doc.id,
+      apodo: doc.data().apodo || "Sin apodo",
+      ubicacion: doc.data().ubicacion || null,
+      tipo_producto: doc.data().tipo_producto || null,
+    }));
+
+    // Obtener dispositivos invitados
+    const invitadosSnapshot = await db
+      .collection("dispositivos")
+      .where("usuarios_invitados", "array-contains", usuarioId)
+      .get();
+
+    const invitados = invitadosSnapshot.docs.map((doc) => ({
+      id: doc.id,
+      apodo: doc.data().apodo || "Sin apodo",
+      ubicacion: doc.data().ubicacion || null,
+      tipo_producto: doc.data().tipo_producto || null,
+    }));
+
+    // Combinar los resultados
+    const dispositivos = [...propios, ...invitados];
+
+    return res.status(200).json(dispositivos);
+  } catch (error) {
+    console.error("Error al obtener dispositivos para el mapa:", error.message);
+    return res.status(500).json({ message: "Error al obtener dispositivos.", error: error.message });
+  }
+});
 
 
 module.exports = router;
