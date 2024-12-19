@@ -6,14 +6,33 @@ const authenticate = require('../../funciones/clientes/middleware/authMiddleware
 // Ruta para obtener todos los productos
 router.get('/productos', async (req, res) => {
     try {
-        const snapshot = await admin.firestore().collection('productos').get();
-        const productos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        return res.status(200).json(productos);
+        // Obtener todos los productos
+        const productosSnapshot = await admin.firestore().collection('productos').get();
+        const productos = productosSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+        // Revisar stock de cada producto
+        const productosConStock = await Promise.all(productos.map(async (producto) => {
+            // Buscar dispositivos sin usuario asignado y con el tipo_producto igual al id del producto
+            const dispositivosSnapshot = await admin.firestore()
+                .collection('dispositivos')
+                .where('tipo_producto', '==', producto.id)
+                .where('usuario_id', '==', null)
+                .limit(1) // Solo necesitamos verificar si existe al menos uno
+                .get();
+
+            // has_stock será true si hay al menos un dispositivo
+            const hasStock = !dispositivosSnapshot.empty;
+            return { ...producto, has_stock: hasStock };
+        }));
+
+        // Devolver la lista de productos con el campo has_stock
+        return res.status(200).json(productosConStock);
     } catch (error) {
-        console.error('Error al obtener productos:', error);
+        console.error('Error al obtener productos con stock:', error);
         return res.status(500).json({ message: 'Error al obtener productos', error: error.message });
     }
 });
+
 
 // Ruta para obtener un producto por ID
 router.get('/productos/:id', async (req, res) => {

@@ -136,21 +136,36 @@ router.post('/crearOrdenDinamicaWeb', authenticate, async (req, res) => {
         }
 
         const db = admin.firestore();
-        const productoDoc = await db.collection('productos').doc(idProducto).get();
-        const planDoc = await db.collection('planes').doc(idPlan).get();
 
+        // Verificar si el producto existe
+        const productoDoc = await db.collection('productos').doc(idProducto).get();
         if (!productoDoc.exists) {
             return res.status(404).json({ message: `Producto con id ${idProducto} no encontrado.` });
         }
 
+        // Verificar si el plan existe
+        const planDoc = await db.collection('planes').doc(idPlan).get();
         if (!planDoc.exists) {
             return res.status(404).json({ message: `Plan con id ${idPlan} no encontrado.` });
         }
 
+        // Verificar si hay stock del producto
+        const dispositivosSnapshot = await db.collection('dispositivos')
+            .where('tipo_producto', '==', idProducto)
+            .where('usuario_id', '==', null) // Dispositivos sin asignar
+            .limit(1) // Solo necesitamos saber si hay al menos uno
+            .get();
+
+        if (dispositivosSnapshot.empty) {
+            return res.status(400).json({ message: 'El producto seleccionado no tiene stock disponible.' });
+        }
+
+        // Calcular el precio total
         const producto = productoDoc.data();
         const plan = planDoc.data();
         const precioTotal = (producto.precio || 0) + (plan.precio || 0);
 
+        // Parámetros para la orden de Mercado Pago
         const preferenceParams = {
             body: {
                 back_urls: {
@@ -180,13 +195,16 @@ router.post('/crearOrdenDinamicaWeb', authenticate, async (req, res) => {
             }
         };
 
+        // Crear la preferencia en Mercado Pago
         const preferenceResponse = await preference.create(preferenceParams);
         res.status(200).json({ url: preferenceResponse.init_point, precioTotal });
+
     } catch (error) {
         console.error('Error al crear la orden de Mercado Pago:', error);
         res.status(500).json({ message: 'Error interno del servidor', error: error.message });
     }
 });
+
 
 
 
